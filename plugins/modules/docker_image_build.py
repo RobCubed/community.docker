@@ -509,6 +509,7 @@ class ImageBuilder(DockerBaseClass):
             environ_update = self.add_args(args)
             args.extend(['--', self.path])
             rc, stdout, stderr = self.client.call_cli(*args, environ_update=environ_update)
+            print("SEARCHFORME", args, environ_update)
             if rc != 0:
                 self.fail('Building %s:%s failed' % (self.name, self.tag), stdout=to_native(stdout), stderr=to_native(stderr), command=args)
             results['stdout'] = to_native(stdout)

@@ -282,12 +282,17 @@ def main():
                 finally:
                     exec_socket.close()
             else:
-              stdout, stderr = (None, None)
+              stdout, stderr = (b"", b"")
               stream = client.post_json_to_stream('/exec/{0}/start', exec_id, data=data, stream=True, tty=tty, demux=True)
-            print("if you see this, its working")
+
             if stream:
-                for thing in stream:
-                    print(thing)
+                for stdout_line, stderr_line in stream:
+                    if stdout_line:
+                      stdout += stdout_line
+                      print("%STDOUT%", stdout_line)
+                    if stderr_line:
+                      stderr += stderr_line
+                      print("%STDERR%", stderr_line)
 
             result = client.get_json('/exec/{0}/json', exec_id)
 
