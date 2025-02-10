@@ -165,6 +165,7 @@ exec_id:
 
 import shlex
 import traceback
+import collections
 
 from ansible.module_utils.common.text.converters import to_text, to_bytes, to_native
 from ansible.module_utils.six import string_types
@@ -269,6 +270,7 @@ def main():
             client.module.exit_json(changed=True, exec_id=exec_id)
 
         else:
+            stream = None
             if stdin and not detach:
                 exec_socket = client.post_json_to_stream_socket('/exec/{0}/start', exec_id, data=data)
                 try:
@@ -280,7 +282,13 @@ def main():
                 finally:
                     exec_socket.close()
             else:
-                stdout, stderr = client.post_json_to_stream('/exec/{0}/start', exec_id, data=data, stream=False, tty=tty, demux=True)
+              stdout, stderr = (None, None)
+              stream = client.post_json_to_stream('/exec/{0}/start', exec_id, data=data, stream=True, tty=tty, demux=True)
+            
+            if stream:
+                for thing in stream:
+                    print(thing)
+                    client.module.log(str(thing))
 
             result = client.get_json('/exec/{0}/json', exec_id)
 
