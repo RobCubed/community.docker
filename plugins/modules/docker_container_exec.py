@@ -284,7 +284,7 @@ def main():
             else:
               stdout, stderr = (None, None)
               stream = client.post_json_to_stream('/exec/{0}/start', exec_id, data=data, stream=True, tty=tty, demux=True)
-            
+            print(stream)
             if stream:
                 for thing in stream:
                     print(thing)
