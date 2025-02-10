@@ -284,7 +284,7 @@ def main():
             else:
               stdout, stderr = (None, None)
               stream = client.post_json_to_stream('/exec/{0}/start', exec_id, data=data, stream=True, tty=tty, demux=True)
-            print(stream)
+            client.module.log(str(thing))
             if stream:
                 for thing in stream:
                     print(thing)
@@ -292,7 +292,7 @@ def main():
 
             result = client.get_json('/exec/{0}/json', exec_id)
 
-            stdout = to_text(stdout or b'')
+            stdout = to_text(stdout or f'this actually isnt stdout, the stream info is {str(stream)}'.encode("utf8"))
             stderr = to_text(stderr or b'')
             if strip_empty_ends:
                 stdout = stdout.rstrip('\r\n')
