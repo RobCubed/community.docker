@@ -284,11 +284,10 @@ def main():
             else:
               stdout, stderr = (None, None)
               stream = client.post_json_to_stream('/exec/{0}/start', exec_id, data=data, stream=True, tty=tty, demux=True)
-            client.module.log(str(stream))
+            client.module.warn(str(stream))
             if stream:
                 for thing in stream:
-                    print(thing)
-                    client.module.log(str(thing))
+                    client.module.warn(str(thing))
 
             result = client.get_json('/exec/{0}/json', exec_id)
 
