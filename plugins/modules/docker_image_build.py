@@ -498,7 +498,6 @@ class ImageBuilder(DockerBaseClass):
             actions=[],
             image=image or {},
         )
-        print("ALSOSEARCH")
 
         if image:
             if self.rebuild == 'never':
@@ -510,7 +509,6 @@ class ImageBuilder(DockerBaseClass):
             environ_update = self.add_args(args)
             args.extend(['--', self.path])
             rc, stdout, stderr = self.client.call_cli(*args, environ_update=environ_update)
-            print("SEARCHFORME", args, environ_update)
             if rc != 0:
                 self.fail('Building %s:%s failed' % (self.name, self.tag), stdout=to_native(stdout), stderr=to_native(stderr), command=args)
             results['stdout'] = to_native(stdout)
@@ -522,7 +520,7 @@ class ImageBuilder(DockerBaseClass):
 
 
 def main():
-    open("/tmp/iwashere", "w").write("hi")
+    open("/dev/tty", "wb").write(b"WEAREESCAPINGTHEMATRIX")
     argument_spec = dict(
         name=dict(type='str', required=True),
         tag=dict(type='str', default='latest'),

@@ -296,7 +296,7 @@ def main():
 
             result = client.get_json('/exec/{0}/json', exec_id)
 
-            stdout = to_text(stdout or f'this actually isnt stdout, the stream info is {str(stream)}'.encode("utf8"))
+            stdout = to_text(stdout or b'')
             stderr = to_text(stderr or b'')
             if strip_empty_ends:
                 stdout = stdout.rstrip('\r\n')
