@@ -4,10 +4,8 @@
 # GNU General Public License v3.0+ (see LICENSES/GPL-3.0-or-later.txt or https://www.gnu.org/licenses/gpl-3.0.txt)
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import sys
 from __future__ import absolute_import, division, print_function
 __metaclass__ = type
-
 
 DOCUMENTATION = r"""
 module: docker_image_build
@@ -283,6 +281,7 @@ command:
 import base64
 import os
 import traceback
+import sys
 
 from ansible.module_utils.common.text.converters import to_native
 from ansible.module_utils.common.text.formatters import human_to_bytes
