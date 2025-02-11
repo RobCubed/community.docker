@@ -498,6 +498,7 @@ class ImageBuilder(DockerBaseClass):
             actions=[],
             image=image or {},
         )
+        print("ALSOSEARCH")
 
         if image:
             if self.rebuild == 'never':
