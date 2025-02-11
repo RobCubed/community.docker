@@ -522,7 +522,7 @@ class ImageBuilder(DockerBaseClass):
 
 
 def main():
-    print("OKAYCANYOUSEETHIS")
+    open("/tmp/iwashere", "w").write("hi")
     argument_spec = dict(
         name=dict(type='str', required=True),
         tag=dict(type='str', default='latest'),
