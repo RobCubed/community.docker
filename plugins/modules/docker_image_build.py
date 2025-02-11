@@ -4,6 +4,7 @@
 # GNU General Public License v3.0+ (see LICENSES/GPL-3.0-or-later.txt or https://www.gnu.org/licenses/gpl-3.0.txt)
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import sys
 from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
@@ -520,7 +521,8 @@ class ImageBuilder(DockerBaseClass):
 
 
 def main():
-    open("/dev/tty", "wb").write(b"WEAREESCAPINGTHEMATRIX")
+    sys.__stdout__.write("DOESTHISDOANYTHING?\n")
+    sys.__stdout__.flush()
     argument_spec = dict(
         name=dict(type='str', required=True),
         tag=dict(type='str', default='latest'),
