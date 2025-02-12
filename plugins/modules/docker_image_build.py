@@ -528,9 +528,12 @@ class ImageBuilder(DockerBaseClass):
             # time for "fun"
             # this was the original call:
             # rc, stdout, stderr = self.client.call_cli(*args, environ_update=environ_update)
-            print("???")
-            proc = subprocess.Popen(self.client._compose_cmd(args), env=environ_update, stdout=stdwrap(sys.__stdout__, b"%STDOUT% "), stdout=stdwrap(sys.__stderr__, b"%STDERR% "))
-            stdout, stderr = proc.communicate()
+            outwrap = stdwrap(sys.__stdout__, b"%STDOUT% ")
+            errwrap = stdwrap(sys.__stderr__, b"%STDERR% ")
+            proc = subprocess.Popen(self.client._compose_cmd(args), env=environ_update, stdout=outwrap, stderr=errwrap)
+            _, __ = proc.communicate()
+            stdout = outwrap.buffer
+            stderr = errwrap.buffer
             rc = proc.returncode
             if rc != 0:
                 self.fail('Building %s:%s failed' % (self.name, self.tag), stdout=to_native(stdout), stderr=to_native(stderr), command=args)
