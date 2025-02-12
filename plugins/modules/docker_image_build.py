@@ -330,8 +330,8 @@ class stdwrap:
     def __init__(self):
         self.io = sys.__stdout__
     
-    def fileio():
-        return self.io.fileio()
+    def fileno(self):
+        return self.io.fileno()
     
     def write(self, data):
         self.io.write(b"%STDOUT% "+data)
