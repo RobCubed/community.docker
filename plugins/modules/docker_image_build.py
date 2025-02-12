@@ -515,7 +515,7 @@ class ImageBuilder(DockerBaseClass):
             stdout = b""
             stderr = b""
             while proc.poll() is None:
-                rl, wl, xl = select.select([proc.stderr, proc.stdout], [], [], 0.1):
+                rl, wl, xl = select.select([proc.stderr, proc.stdout], [], [], 0.1)
                 for io in rl:
                     data = io.read()
                     if io == proc.stdout:
