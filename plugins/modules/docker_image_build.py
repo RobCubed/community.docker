@@ -283,6 +283,7 @@ import os
 import traceback
 import select
 import subprocess
+import sys
 
 from ansible.module_utils.common.text.converters import to_native
 from ansible.module_utils.common.text.formatters import human_to_bytes
@@ -304,6 +305,13 @@ from ansible_collections.community.docker.plugins.module_utils.version import Lo
 from ansible_collections.community.docker.plugins.module_utils._api.utils.utils import (
     parse_repository_tag,
 )
+
+def realPrint(*s):
+    stdout = sys.__stdout__
+    converted = [(x if isinstance(x, bytes) else str(x).encode()) for x in s]
+    stdout.write(b" ".join(converted))
+    stdout.write(b"\n")
+    stdout.flush()
 
 
 def convert_to_bytes(value, module, name, unlimited_value=None):
@@ -519,10 +527,10 @@ class ImageBuilder(DockerBaseClass):
                 for io in rl:
                     data = io.read()
                     if io == proc.stdout:
-                        print("%STDOUT%", data)
+                        realPrint("%STDOUT%", data)
                         stdout += data
                     elif io == proc.stderr:
-                        print("%STDERR%", data)
+                        realPrint("%STDERR%", data)
                         stderr += data
 
             rc = proc.poll()
