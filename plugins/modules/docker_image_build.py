@@ -306,10 +306,10 @@ from ansible_collections.community.docker.plugins.module_utils._api.utils.utils 
     parse_repository_tag,
 )
 
-def realPrint(*s):
+def realPrint(prefix, *s):
     stdout = sys.__stdout__
     converted = [x.decode() if isinstance(x, bytes) else str(x) for x in s]
-    stdout.write(" ".join(converted))
+    stdout.write(prefix + " ".join(converted).replace("\n", f"\n{prefix}"))
     stdout.write("\n")
     stdout.flush()
 
