@@ -281,7 +281,7 @@ command:
 import base64
 import os
 import traceback
-import sys
+import select
 import subprocess
 
 from ansible.module_utils.common.text.converters import to_native
@@ -325,23 +325,6 @@ def _quote_csv(input):
     if input.strip() == input and all(i not in input for i in '",\r\n'):
         return input
     return '"{0}"'.format(input.replace('"', '""'))
-
-class stdwrap:
-    def __init__(self, io, prefix):
-        self.prefix = prefix
-        self.io = io
-        self.buffer = ""
-    
-    def fileno(self):
-        return self.io.fileno()
-    
-    def flush(self):
-      self.io.flush()
-    
-    def write(self, data):
-        self.io.write(self.prefix+data)
-        self.io.flush()
-        self.buffer += data
 
 class ImageBuilder(DockerBaseClass):
     def __init__(self, client):
@@ -528,13 +511,21 @@ class ImageBuilder(DockerBaseClass):
             # time for "fun"
             # this was the original call:
             # rc, stdout, stderr = self.client.call_cli(*args, environ_update=environ_update)
-            outwrap = stdwrap(sys.__stdout__, b"%STDOUT% ")
-            errwrap = stdwrap(sys.__stderr__, b"%STDERR% ")
-            proc = subprocess.Popen(self.client._compose_cmd(args), env=environ_update, stdout=outwrap, stderr=errwrap)
-            _, __ = proc.communicate()
-            stdout = outwrap.buffer
-            stderr = errwrap.buffer
-            rc = proc.returncode
+            proc = subprocess.Popen(self.client._compose_cmd(args), env=environ_update, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            stdout = b""
+            stderr = b""
+            while proc.poll() is None:
+                rl, wl, xl = select.select([proc.stderr, proc.stdout], [], [], 0.1):
+                for io in rl:
+                    data = io.read()
+                    if io == proc.stdout:
+                        print("%STDOUT%", data)
+                        stdout += data
+                    elif io == proc.stderr:
+                        print("%STDERR%", data)
+                        stderr += data
+
+            rc = proc.poll()
             if rc != 0:
                 self.fail('Building %s:%s failed' % (self.name, self.tag), stdout=to_native(stdout), stderr=to_native(stderr), command=args)
             results['stdout'] = to_native(stdout)
