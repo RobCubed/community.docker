@@ -327,9 +327,10 @@ def _quote_csv(input):
     return '"{0}"'.format(input.replace('"', '""'))
 
 class stdwrap:
-    def __init__(self):
-        print("stdwrap init")
-        self.io = sys.__stdout__
+    def __init__(self, io, prefix):
+        self.prefix = prefix
+        self.io = io
+        self.buffer = ""
     
     def fileno(self):
         return self.io.fileno()
@@ -338,15 +339,9 @@ class stdwrap:
       self.io.flush()
     
     def write(self, data):
-        print("write called")
-        self.io.write(b"%STDOUT% "+data)
+        self.io.write(self.prefix+data)
         self.io.flush()
-    
-    def writelines(self, data): 
-        print("lines called")
-        for thing in data:
-          self.io.write(b"%STDOUT% " + thing + "\n")
-          self.io.flush()
+        self.buffer += data
 
 class ImageBuilder(DockerBaseClass):
     def __init__(self, client):
@@ -534,7 +529,7 @@ class ImageBuilder(DockerBaseClass):
             # this was the original call:
             # rc, stdout, stderr = self.client.call_cli(*args, environ_update=environ_update)
             print("???")
-            proc = subprocess.Popen(self.client._compose_cmd(args), env=environ_update, stdout=stdwrap())
+            proc = subprocess.Popen(self.client._compose_cmd(args), env=environ_update, stdout=stdwrap(sys.__stdout__, b"%STDOUT% "), stdout=stdwrap(sys.__stderr__, b"%STDERR% "))
             stdout, stderr = proc.communicate()
             rc = proc.returncode
             if rc != 0:
