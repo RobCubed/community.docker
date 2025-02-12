@@ -289,10 +289,10 @@ def main():
                 for stdout_line, stderr_line in stream:
                     if stdout_line:
                       stdout += stdout_line
-                      print("%STDOUT%", stdout_line)
+                      print("%STDOUT%", to_text(stdout_line))
                     if stderr_line:
                       stderr += stderr_line
-                      print("%STDERR%", stderr_line)
+                      print("%STDERR%", to_text(stderr_line))
 
             result = client.get_json('/exec/{0}/json', exec_id)
 
