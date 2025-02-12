@@ -308,9 +308,9 @@ from ansible_collections.community.docker.plugins.module_utils._api.utils.utils 
 
 def realPrint(*s):
     stdout = sys.__stdout__
-    converted = [(x if isinstance(x, bytes) else str(x).encode()) for x in s]
-    stdout.write(b" ".join(converted))
-    stdout.write(b"\n")
+    converted = [str(x) for x in s]
+    stdout.write(" ".join(converted))
+    stdout.write("\n")
     stdout.flush()
 
 
