@@ -327,11 +327,12 @@ def _quote_csv(input):
     return '"{0}"'.format(input.replace('"', '""'))
 
 class stdwrap:
-    def __init__():
+    def __init__(self):
         self.io = sys.__stdout__
     
     def write(self, data):
         self.io.write(b"%STDOUT% "+data)
+        self.io.flush()
 
 class ImageBuilder(DockerBaseClass):
     def __init__(self, client):
