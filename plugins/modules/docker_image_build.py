@@ -329,10 +329,9 @@ def _quote_csv(input):
 class stdwrap:
     def __init__(self):
         self.io = sys.__stdout__
-        self.__class__ = type(self.io.__class__.__name__,
-                              (self.__class__, self.io.__class__),
-                              {})
-        self.__dict__ = self.io.__dict__
+    
+    def fileio():
+        return self.io.fileio()
     
     def write(self, data):
         self.io.write(b"%STDOUT% "+data)
