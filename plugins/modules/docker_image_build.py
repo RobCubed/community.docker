@@ -326,6 +326,12 @@ def _quote_csv(input):
         return input
     return '"{0}"'.format(input.replace('"', '""'))
 
+class stdwrap:
+    def __init__():
+        self.io = sys.__stdout__
+    
+    def write(self, data):
+        self.io.write(b"%STDOUT% "+data)
 
 class ImageBuilder(DockerBaseClass):
     def __init__(self, client):
@@ -512,7 +518,7 @@ class ImageBuilder(DockerBaseClass):
             # time for "fun"
             # this was the original call:
             # rc, stdout, stderr = self.client.call_cli(*args, environ_update=environ_update)
-            proc = subprocess.Popen(self.client._compose_cmd(args), env=environ_update, stdout=sys.__stdout__, stderr=sys.__stderr__)
+            proc = subprocess.Popen(self.client._compose_cmd(args), env=environ_update, stdout=stdwrap())
             stdout, stderr = proc.communicate()
             rc = proc.returncode
             if rc != 0:
