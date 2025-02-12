@@ -330,10 +330,9 @@ class stdwrap:
     def __init__(self):
         self.io = sys.__stdout__
         self.__class__ = type(__stdout__.__class__.__name__,
-                              (self.__class__, __stdout__.__class__),
+                              (self.__class__, baseObject.__class__),
                               {})
         self.__dict__ = __stdout__.__dict__
-        
     
     def write(self, data):
         self.io.write(b"%STDOUT% "+data)
