@@ -282,6 +282,7 @@ import base64
 import os
 import traceback
 import sys
+import subprocess
 
 from ansible.module_utils.common.text.converters import to_native
 from ansible.module_utils.common.text.formatters import human_to_bytes
@@ -508,7 +509,12 @@ class ImageBuilder(DockerBaseClass):
             args = ['buildx', 'build', '--progress', 'plain']
             environ_update = self.add_args(args)
             args.extend(['--', self.path])
-            rc, stdout, stderr = self.client.call_cli(*args, environ_update=environ_update)
+            # time for "fun"
+            # this was the original call:
+            # rc, stdout, stderr = self.client.call_cli(*args, environ_update=environ_update)
+            proc = subprocess.Popen(self.client._compose_cmd(args), env=environ_update, stdout=sys.__stdout__, stderr=sys.__stderr__)
+            stdout, stderr = proc.communicate()
+            rc = proc.returncode
             if rc != 0:
                 self.fail('Building %s:%s failed' % (self.name, self.tag), stdout=to_native(stdout), stderr=to_native(stderr), command=args)
             results['stdout'] = to_native(stdout)
@@ -520,8 +526,6 @@ class ImageBuilder(DockerBaseClass):
 
 
 def main():
-    sys.__stdout__.write("DOESTHISDOANYTHING?\n")
-    sys.__stdout__.flush()
     argument_spec = dict(
         name=dict(type='str', required=True),
         tag=dict(type='str', default='latest'),
