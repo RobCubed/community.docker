@@ -328,16 +328,22 @@ def _quote_csv(input):
 
 class stdwrap:
     def __init__(self):
+        print("stdwrap init")
         self.io = sys.__stdout__
     
     def fileno(self):
         return self.io.fileno()
     
+    def flush(self):
+      self.io.flush()
+    
     def write(self, data):
+        print("write called")
         self.io.write(b"%STDOUT% "+data)
         self.io.flush()
     
     def writelines(self, data): 
+        print("lines called")
         for thing in data:
           self.io.write(b"%STDOUT% " + thing + "\n")
           self.io.flush()
@@ -527,6 +533,7 @@ class ImageBuilder(DockerBaseClass):
             # time for "fun"
             # this was the original call:
             # rc, stdout, stderr = self.client.call_cli(*args, environ_update=environ_update)
+            print("???")
             proc = subprocess.Popen(self.client._compose_cmd(args), env=environ_update, stdout=stdwrap())
             stdout, stderr = proc.communicate()
             rc = proc.returncode
