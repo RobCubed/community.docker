@@ -309,17 +309,9 @@ from ansible_collections.community.docker.plugins.module_utils._api.utils.utils 
 def realPrint(prefix, *s):
     stdout = sys.__stdout__
     converted = [x.decode() if isinstance(x, bytes) else str(x) for x in s]
-    string = prefix + " ".join(converted).replace("\n", f"\n{prefix}") + "\n"
-    stdout.write(string)
+    stdout.write(prefix + " ".join(converted).replace("\n", f"\n{prefix}"))
+    stdout.write("\n")
     stdout.flush()
-    # Bypass for local
-    try:
-        with open("/dev/tty", "w") as f:
-            f.write(string)
-            f.flush()
-    except:
-        # Not sure if it will throw an error if no tty exists
-        pass
 
 
 def convert_to_bytes(value, module, name, unlimited_value=None):
