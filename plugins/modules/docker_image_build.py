@@ -316,17 +316,22 @@ def realPrint(prefix, *s):
 def printOutputs(proc):
     stdout = b""
     stderr = b""
-    rl, wl, xl = select.select([proc.stderr, proc.stdout], [], [], 0.1)
+    ios = [proc.stderr, proc.stdout]
+
+    rl, wl, xl = select.select(ios, [], [], 0.1)
     while rl:
         for io in rl:
             data = io.readline()
+            if not data:
+                ios.remove(rl)
+                continue
             if io == proc.stdout:
                 realPrint("%STDOUT%", data)
                 stdout += data
             elif io == proc.stderr:
                 realPrint("%STDERR%", data)
                 stderr += data
-        rl, wl, xl = select.select([proc.stderr, proc.stdout], [], [], 0.1)
+        rl, wl, xl = select.select(ios, [], [], 0.1)
     return (stdout, stderr)
 
 def convert_to_bytes(value, module, name, unlimited_value=None):
