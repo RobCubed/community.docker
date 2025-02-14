@@ -506,6 +506,7 @@ class ImageBuilder(DockerBaseClass):
             actions=[],
             image=image or {},
         )
+        realPrint("%LOG%", "5")
 
         if image:
             if self.rebuild == 'never':
@@ -522,6 +523,7 @@ class ImageBuilder(DockerBaseClass):
             proc = subprocess.Popen(self.client._compose_cmd(args), env=environ_update, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             stdout = b""
             stderr = b""
+            realPrint("%LOG%", "6")
             while proc.poll() is None:
                 rl, wl, xl = select.select([proc.stderr, proc.stdout], [], [], 0.1)
                 for io in rl:
@@ -545,6 +547,7 @@ class ImageBuilder(DockerBaseClass):
 
 
 def main():
+    realPrint("%LOG%", "1")
     argument_spec = dict(
         name=dict(type='str', required=True),
         tag=dict(type='str', default='latest'),
@@ -604,14 +607,17 @@ def main():
             ],
         ),
     )
+    realPrint("%LOG%", "2")
 
     client = AnsibleModuleDockerClient(
         argument_spec=argument_spec,
         supports_check_mode=True,
         needs_api_version=False,
     )
+    realPrint("%LOG%", "3")
 
     try:
+        realPrint("%LOG%", "4")
         results = ImageBuilder(client).build_image()
         client.module.exit_json(**results)
     except DockerException as e:
