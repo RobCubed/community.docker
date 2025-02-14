@@ -519,7 +519,10 @@ class ImageBuilder(DockerBaseClass):
             # time for "fun"
             # this was the original call:
             # rc, stdout, stderr = self.client.call_cli(*args, environ_update=environ_update)
+            realPrint("%LOG%", "before")
             proc = subprocess.Popen(self.client._compose_cmd(args), env=environ_update, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            realPrint("%LOG%", "after")
+
             stdout = b""
             stderr = b""
             while proc.poll() is None:
