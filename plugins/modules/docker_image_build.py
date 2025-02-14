@@ -528,7 +528,7 @@ class ImageBuilder(DockerBaseClass):
             while proc.poll() is None:
                 rl, wl, xl = select.select([proc.stderr, proc.stdout], [], [], 1)
                 for io in rl:
-                    data = io.read()
+                    data = io.readline()
                     if io.fileno() == proc.stdout.fileno():
                         realPrint("%STDOUT%", data)
                         stdout += data
