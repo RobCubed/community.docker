@@ -545,7 +545,7 @@ class ImageBuilder(DockerBaseClass):
             # one more for good measure
             o, e = printOutputs(proc)
             stdout += o
-            stdrr += e
+            stderr += e
 
             rc = proc.poll()
             if rc != 0:
