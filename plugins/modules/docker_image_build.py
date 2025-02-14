@@ -313,6 +313,21 @@ def realPrint(prefix, *s):
     stdout.write("\n")
     stdout.flush()
 
+def printOutputs(proc):
+    stdout = b""
+    stderr = b""
+    rl, wl, xl = select.select([proc.stderr, proc.stdout], [], [], 0.1)
+    while rl:
+        for io in rl:
+            data = io.readline()
+            if io == proc.stdout:
+                realPrint("%STDOUT%", data)
+                stdout += data
+            elif io == proc.stderr:
+                realPrint("%STDERR%", data)
+                stderr += data
+        rl, wl, xl = select.select([proc.stderr, proc.stdout], [], [], 0.1)
+    return (stdout, stderr)
 
 def convert_to_bytes(value, module, name, unlimited_value=None):
     if value is None:
@@ -524,17 +539,13 @@ class ImageBuilder(DockerBaseClass):
             stdout = b""
             stderr = b""
             while proc.poll() is None:
-                rl, wl, xl = select.select([proc.stderr, proc.stdout], [], [], 0.1)
-                while rl:
-                    for io in rl:
-                        data = io.readline()
-                        if io == proc.stdout:
-                            realPrint("%STDOUT%", data)
-                            stdout += data
-                        elif io == proc.stderr:
-                            realPrint("%STDERR%", data)
-                            stderr += data
-                    rl, wl, xl = select.select([proc.stderr, proc.stdout], [], [], 0.1)
+                o, e = printOutputs(proc)
+                stdout += o
+                stdrr += e
+            # one more for good measure
+            o, e = printOutputs(proc)
+            stdout += o
+            stdrr += e
 
             rc = proc.poll()
             if rc != 0:
