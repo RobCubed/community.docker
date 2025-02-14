@@ -545,6 +545,8 @@ class ImageBuilder(DockerBaseClass):
 
 
 def main():
+    print("HELPME")
+    realPrint("REALHELPME")
     argument_spec = dict(
         name=dict(type='str', required=True),
         tag=dict(type='str', default='latest'),
