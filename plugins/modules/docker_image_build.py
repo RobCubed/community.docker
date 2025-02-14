@@ -541,7 +541,7 @@ class ImageBuilder(DockerBaseClass):
             while proc.poll() is None:
                 o, e = printOutputs(proc)
                 stdout += o
-                stdrr += e
+                stderr += e
             # one more for good measure
             o, e = printOutputs(proc)
             stdout += o
