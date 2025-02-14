@@ -523,15 +523,19 @@ class ImageBuilder(DockerBaseClass):
             stdout = b""
             stderr = b""
             while proc.poll() is None:
-                rl, wl, xl = select.select([proc.stderr, proc.stdout], [], [], 0.1)
+                rl, wl, xl = select.select([proc.stderr, proc.stdout], [], [], 1)
                 for io in rl:
                     data = io.read()
-                    if io is proc.stdout:
+                    if io.fileno() == proc.stdout.fileno():
                         realPrint("%STDOUT%", data)
                         stdout += data
-                    elif io is proc.stderr:
+                    elif io.fileno() == proc.stderr.fileno():
                         realPrint("%STDERR%", data)
                         stderr += data
+                    else:
+                        realPrint("%LOG%", "what", data)
+                realPrint("%LOG%", "nothin", rl)
+
 
             rc = proc.poll()
             if rc != 0:
