@@ -305,9 +305,9 @@ from ansible_collections.community.docker.plugins.module_utils.version import Lo
 from ansible_collections.community.docker.plugins.module_utils._api.utils.utils import (
     parse_repository_tag,
 )
+stdout = sys.__stdout__
 
 def realPrint(prefix, *s):
-    stdout = sys.__stdout__
     converted = [x.decode() if isinstance(x, bytes) else str(x) for x in s]
     stdout.write(prefix + " ".join(converted).replace("\n", f"\n{prefix}"))
     stdout.write("\n")
@@ -545,8 +545,6 @@ class ImageBuilder(DockerBaseClass):
 
 
 def main():
-    print("HELPME")
-    realPrint("REALHELPME")
     argument_spec = dict(
         name=dict(type='str', required=True),
         tag=dict(type='str', default='latest'),
@@ -615,8 +613,6 @@ def main():
 
     try:
         results = ImageBuilder(client).build_image()
-        print("HELP")
-        realPrint("REALHELP")
         client.module.exit_json(**results)
     except DockerException as e:
         client.fail('An unexpected Docker error occurred: {0}'.format(to_native(e)), exception=traceback.format_exc())
