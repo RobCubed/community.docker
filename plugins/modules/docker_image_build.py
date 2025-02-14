@@ -613,6 +613,8 @@ def main():
 
     try:
         results = ImageBuilder(client).build_image()
+        print("HELP")
+        realPrint("REALHELP")
         client.module.exit_json(**results)
     except DockerException as e:
         client.fail('An unexpected Docker error occurred: {0}'.format(to_native(e)), exception=traceback.format_exc())
