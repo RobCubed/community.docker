@@ -323,7 +323,7 @@ def printOutputs(proc):
         for io in rl:
             data = io.readline()
             if not data:
-                ios.remove(rl)
+                ios.remove(io)
                 continue
             if io == proc.stdout:
                 realPrint("%STDOUT%", data)
