@@ -504,6 +504,7 @@ class ImageBuilder(DockerBaseClass):
                 if output['type'] == 'oci':
                     subargs.extend(['type=oci', 'dest={dest}'.format(dest=output['dest'])])
                 if output['type'] == 'docker':
+                    args.extend(["--load"])
                     subargs.append('type=docker')
                     if output['dest'] is not None:
                         subargs.append('dest={dest}'.format(dest=output['dest']))
