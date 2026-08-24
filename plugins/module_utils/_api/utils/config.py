@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # This code is part of the Ansible collection community.docker, but is an independent component.
 # This particular file, and this file only, is based on the Docker SDK for Python (https://github.com/docker/docker-py/)
 #
@@ -7,33 +6,41 @@
 # It is licensed under the Apache 2.0 license (see LICENSES/Apache-2.0.txt in this collection)
 # SPDX-License-Identifier: Apache-2.0
 
-from __future__ import (absolute_import, division, print_function)
-__metaclass__ = type
+# Note that this module util is **PRIVATE** to the collection. It can have breaking changes at any time.
+# Do not use this from other collections or standalone plugins/modules!
+
+from __future__ import annotations
 
 import json
 import logging
 import os
+import typing as t
 
 from ..constants import IS_WINDOWS_PLATFORM
 
-DOCKER_CONFIG_FILENAME = os.path.join('.docker', 'config.json')
-LEGACY_DOCKER_CONFIG_FILENAME = '.dockercfg'
+DOCKER_CONFIG_FILENAME = os.path.join(".docker", "config.json")
+LEGACY_DOCKER_CONFIG_FILENAME = ".dockercfg"
 
 log = logging.getLogger(__name__)
 
 
-def get_default_config_file():
+def get_default_config_file() -> str:
     return os.path.join(home_dir(), DOCKER_CONFIG_FILENAME)
 
 
-def find_config_file(config_path=None):
+def find_config_file(config_path: str | None = None) -> str | None:
     homedir = home_dir()
-    paths = list(filter(None, [
-        config_path,  # 1
-        config_path_from_environment(),  # 2
-        os.path.join(homedir, DOCKER_CONFIG_FILENAME),  # 3
-        os.path.join(homedir, LEGACY_DOCKER_CONFIG_FILENAME),  # 4
-    ]))
+    paths = list(
+        filter(
+            None,
+            [
+                config_path,  # 1
+                config_path_from_environment(),  # 2
+                os.path.join(homedir, DOCKER_CONFIG_FILENAME),  # 3
+                os.path.join(homedir, LEGACY_DOCKER_CONFIG_FILENAME),  # 4
+            ],
+        )
+    )
 
     log.debug("Trying paths: %s", repr(paths))
 
@@ -47,32 +54,31 @@ def find_config_file(config_path=None):
     return None
 
 
-def config_path_from_environment():
-    config_dir = os.environ.get('DOCKER_CONFIG')
+def config_path_from_environment() -> str | None:
+    config_dir = os.environ.get("DOCKER_CONFIG")
     if not config_dir:
         return None
     return os.path.join(config_dir, os.path.basename(DOCKER_CONFIG_FILENAME))
 
 
-def home_dir():
+def home_dir() -> str:
     """
     Get the user's home directory, using the same logic as the Docker Engine
     client - use %USERPROFILE% on Windows, $HOME/getuid on POSIX.
     """
     if IS_WINDOWS_PLATFORM:
-        return os.environ.get('USERPROFILE', '')
-    else:
-        return os.path.expanduser('~')
+        return os.environ.get("USERPROFILE", "")
+    return os.path.expanduser("~")
 
 
-def load_general_config(config_path=None):
+def load_general_config(config_path: str | None = None) -> dict[str, t.Any]:
     config_file = find_config_file(config_path)
 
     if not config_file:
         return {}
 
     try:
-        with open(config_file) as f:
+        with open(config_file, "rt", encoding="utf-8") as f:
             return json.load(f)
     except (IOError, ValueError) as e:
         # In the case of a legacy `.dockercfg` file, we will not

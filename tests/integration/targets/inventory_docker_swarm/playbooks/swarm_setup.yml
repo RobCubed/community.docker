@@ -10,14 +10,14 @@
 
   tasks:
     - name: Setup docker
-      import_role:
-        name: setup_docker
+      ansible.builtin.import_role:
+        name: setup_docker  # noqa: syntax-check[specific]
 
     - name: Setup Docker SDK for Python
-      import_role:
+      ansible.builtin.import_role:
         name: setup_docker_sdk_for_python
 
     - name: Create a Swarm cluster
       community.docker.docker_swarm:
         state: present
-        advertise_addr: "{{ansible_default_ipv4.address | default('127.0.0.1')}}"
+        advertise_addr: "{{ ansible_facts.default_ipv4.address | default('127.0.0.1') }}"

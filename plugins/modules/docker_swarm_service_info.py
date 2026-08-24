@@ -4,9 +4,7 @@
 # GNU General Public License v3.0+ (see LICENSES/GPL-3.0-or-later.txt or https://www.gnu.org/licenses/gpl-3.0.txt)
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from __future__ import absolute_import, division, print_function
-__metaclass__ = type
-
+from __future__ import annotations
 
 DOCUMENTATION = r"""
 module: docker_swarm_service_info
@@ -18,12 +16,12 @@ description:
   - Essentially returns the output of C(docker service inspect <name>).
   - Must be executed on a host running as Swarm Manager, otherwise the module will fail.
 extends_documentation_fragment:
-  - community.docker.docker
-  - community.docker.docker.docker_py_1_documentation
-  - community.docker.attributes
-  - community.docker.attributes.actiongroup_docker
-  - community.docker.attributes.info_module
-  - community.docker.attributes.idempotent_not_modify_state
+  - community.docker._docker
+  - community.docker._docker.docker_py_2_documentation
+  - community.docker._attributes
+  - community.docker._attributes.actiongroup_docker
+  - community.docker._attributes.info_module
+  - community.docker._attributes.idempotent_not_modify_state
 
 options:
   name:
@@ -41,6 +39,7 @@ requirements:
 """
 
 EXAMPLES = r"""
+---
 - name: Get info from a service
   community.docker.docker_swarm_service_info:
     name: myservice
@@ -63,8 +62,7 @@ service:
 """
 
 import traceback
-
-from ansible.module_utils.common.text.converters import to_native
+import typing as t
 
 try:
     from docker.errors import DockerException
@@ -72,30 +70,28 @@ except ImportError:
     # missing Docker SDK for Python handled in ansible.module_utils.docker.common
     pass
 
-from ansible_collections.community.docker.plugins.module_utils.common import (
+from ansible_collections.community.docker.plugins.module_utils._common import (
     RequestException,
 )
-
-from ansible_collections.community.docker.plugins.module_utils.swarm import AnsibleDockerSwarmClient
-
-
-def get_service_info(client):
-    service = client.module.params['name']
-    return client.get_service_inspect(
-        service_id=service,
-        skip_missing=True
-    )
+from ansible_collections.community.docker.plugins.module_utils._swarm import (
+    AnsibleDockerSwarmClient,
+)
 
 
-def main():
-    argument_spec = dict(
-        name=dict(type='str', required=True),
-    )
+def get_service_info(client: AnsibleDockerSwarmClient) -> dict[str, t.Any] | None:
+    service = client.module.params["name"]
+    return client.get_service_inspect(service_id=service, skip_missing=True)
+
+
+def main() -> None:
+    argument_spec = {
+        "name": {"type": "str", "required": True},
+    }
 
     client = AnsibleDockerSwarmClient(
         argument_spec=argument_spec,
         supports_check_mode=True,
-        min_docker_version='2.0.0',
+        min_docker_version="2.0.0",
     )
 
     client.fail_task_if_not_swarm_manager()
@@ -103,18 +99,18 @@ def main():
     try:
         service = get_service_info(client)
 
-        client.module.exit_json(
-            changed=False,
-            service=service,
-            exists=bool(service)
-        )
+        client.module.exit_json(changed=False, service=service, exists=bool(service))
     except DockerException as e:
-        client.fail('An unexpected docker error occurred: {0}'.format(to_native(e)), exception=traceback.format_exc())
+        client.fail(
+            f"An unexpected Docker error occurred: {e}",
+            exception=traceback.format_exc(),
+        )
     except RequestException as e:
         client.fail(
-            'An unexpected requests error occurred when Docker SDK for Python tried to talk to the docker daemon: {0}'.format(to_native(e)),
-            exception=traceback.format_exc())
+            f"An unexpected requests error occurred when Docker SDK for Python tried to talk to the docker daemon: {e}",
+            exception=traceback.format_exc(),
+        )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

@@ -21,17 +21,17 @@
 
   block:
     - name: Registering container name
-      set_fact:
+      ansible.builtin.set_fact:
         cnames: "{{ cnames + [pname ~ '-' ~ cname ~ '-1'] }}"
         dnetworks: "{{ dnetworks + [pname ~ '_default'] }}"
 
     - name: Create project directory
-      file:
+      ansible.builtin.file:
         path: '{{ project_src }}'
         state: directory
 
     - name: Make sure images are not around
-      docker_image_remove:
+      community.docker.docker_image_remove:
         name: '{{ item }}'
       loop:
         - '{{ non_existing_image }}'
@@ -42,12 +42,12 @@
 ####################################################################
 
     - name: Template project file with non-existing image
-      copy:
+      ansible.builtin.copy:
         dest: '{{ project_src }}/docker-compose.yml'
         content: '{{ test_service_non_existing }}'
 
     - name: Present with pull=never (check)
-      docker_compose_v2:
+      community.docker.docker_compose_v2:
         project_src: '{{ project_src }}'
         state: present
         pull: never
@@ -56,7 +56,7 @@
       ignore_errors: true
 
     - name: Present with pull=never
-      docker_compose_v2:
+      community.docker.docker_compose_v2:
         project_src: '{{ project_src }}'
         state: present
         pull: never
@@ -64,7 +64,7 @@
       ignore_errors: true
 
     - name: Present without explicit pull (check)
-      docker_compose_v2:
+      community.docker.docker_compose_v2:
         project_src: '{{ project_src }}'
         state: present
       check_mode: true
@@ -72,38 +72,41 @@
       ignore_errors: true
 
     - name: Present without explicit pull
-      docker_compose_v2:
+      community.docker.docker_compose_v2:
         project_src: '{{ project_src }}'
         state: present
       register: present_2
       ignore_errors: true
 
-    - assert:
+    - ansible.builtin.assert:
         that:
           - present_1_check is failed or present_1_check is changed
-          - present_1_check is changed or present_1_check.msg.startswith('General error:')
-          - present_1_check.warnings | default([]) | select('regex', ' Please report this at ') | length == 0
+          - present_1_check is changed or 'General error:' in present_1_check.msg
+          - present_1_check.warnings | default([]) | select('regex', ' please report this at ') | length == 0
           - present_1 is failed
-          - present_1.msg.startswith('General error:')
-          - present_1.warnings | default([]) | select('regex', ' Please report this at ') | length == 0
+          - >-
+            'General error:' in present_1.msg
+          - present_1.warnings | default([]) | select('regex', ' please report this at ') | length == 0
           - present_2_check is failed
-          - present_2_check.msg.startswith('Error when processing ' ~ cname ~ ':')
-          - present_2_check.warnings | default([]) | select('regex', ' Please report this at ') | length == 0
+          - present_2_check.msg.startswith('Error when processing ' ~ cname ~ ':') or
+            present_2_check.msg.startswith('Error when processing image ' ~ non_existing_image ~ ':')
+          - present_2_check.warnings | default([]) | select('regex', ' please report this at ') | length == 0
           - present_2 is failed
-          - present_2.msg.startswith('Error when processing ' ~ cname ~ ':')
-          - present_2.warnings | default([]) | select('regex', ' Please report this at ') | length == 0
+          - present_2.msg.startswith('Error when processing ' ~ cname ~ ':') or
+            present_2.msg.startswith('Error when processing image ' ~ non_existing_image ~ ':')
+          - present_2.warnings | default([]) | select('regex', ' please report this at ') | length == 0
 
 ####################################################################
 ## Regular image ###################################################
 ####################################################################
 
     - name: Template project file with simple image
-      copy:
+      ansible.builtin.copy:
         dest: '{{ project_src }}/docker-compose.yml'
         content: '{{ test_service_simple }}'
 
     - name: Present with pull=missing (check)
-      docker_compose_v2:
+      community.docker.docker_compose_v2:
         project_src: '{{ project_src }}'
         state: present
         pull: missing
@@ -111,14 +114,14 @@
       register: present_1_check
 
     - name: Present with pull=missing
-      docker_compose_v2:
+      community.docker.docker_compose_v2:
         project_src: '{{ project_src }}'
         state: present
         pull: missing
       register: present_1
 
     - name: Present with pull=missing (idempotent, check)
-      docker_compose_v2:
+      community.docker.docker_compose_v2:
         project_src: '{{ project_src }}'
         state: present
         pull: missing
@@ -126,14 +129,14 @@
       register: present_2_check
 
     - name: Present with pull=missing (idempotent)
-      docker_compose_v2:
+      community.docker.docker_compose_v2:
         project_src: '{{ project_src }}'
         state: present
         pull: missing
       register: present_2
 
     - name: Present with pull=always (check)
-      docker_compose_v2:
+      community.docker.docker_compose_v2:
         project_src: '{{ project_src }}'
         state: present
         pull: always
@@ -141,19 +144,19 @@
       register: present_3_check
 
     - name: Present with pull=always
-      docker_compose_v2:
+      community.docker.docker_compose_v2:
         project_src: '{{ project_src }}'
         state: present
         pull: always
       register: present_3
 
     - name: Stopping service
-      docker_compose_v2:
+      community.docker.docker_compose_v2:
         project_src: '{{ project_src }}'
         state: absent
 
     - name: Present with pull=never (check)
-      docker_compose_v2:
+      community.docker.docker_compose_v2:
         project_src: '{{ project_src }}'
         state: present
         pull: missing
@@ -161,14 +164,14 @@
       register: present_4_check
 
     - name: Present with pull=never
-      docker_compose_v2:
+      community.docker.docker_compose_v2:
         project_src: '{{ project_src }}'
         state: present
         pull: missing
       register: present_4
 
     - name: Present with pull=never (idempotent, check)
-      docker_compose_v2:
+      community.docker.docker_compose_v2:
         project_src: '{{ project_src }}'
         state: present
         pull: missing
@@ -176,48 +179,48 @@
       register: present_5_check
 
     - name: Present with pull=never (idempotent)
-      docker_compose_v2:
+      community.docker.docker_compose_v2:
         project_src: '{{ project_src }}'
         state: present
         pull: missing
       register: present_5
 
     - name: Cleanup
-      docker_compose_v2:
+      community.docker.docker_compose_v2:
         project_src: '{{ project_src }}'
         state: absent
 
-    - assert:
+    - ansible.builtin.assert:
         that:
           - present_1_check is changed
           - (present_1_check.actions | selectattr('status', 'eq', 'Pulling') | first) is truthy
           - (present_1_check.actions | selectattr('status', 'eq', 'Creating') | first) is truthy
-          - present_1_check.warnings | default([]) | select('regex', ' Please report this at ') | length == 0
+          - present_1_check.warnings | default([]) | select('regex', ' please report this at ') | length == 0
           - present_1 is changed
           - (present_1.actions | selectattr('status', 'eq', 'Pulling') | first) is truthy
           - (present_1.actions | selectattr('status', 'eq', 'Creating') | first) is truthy
-          - present_1.warnings | default([]) | select('regex', ' Please report this at ') | length == 0
+          - present_1.warnings | default([]) | select('regex', ' please report this at ') | length == 0
           - present_2_check is not changed
-          - present_2_check.warnings | default([]) | select('regex', ' Please report this at ') | length == 0
+          - present_2_check.warnings | default([]) | select('regex', ' please report this at ') | length == 0
           - present_2 is not changed
-          - present_2.warnings | default([]) | select('regex', ' Please report this at ') | length == 0
+          - present_2.warnings | default([]) | select('regex', ' please report this at ') | length == 0
           - present_3_check is changed
           - (present_3_check.actions | selectattr('status', 'eq', 'Pulling') | first) is truthy
           - present_3_check.actions | selectattr('status', 'eq', 'Creating') | length == 0
           - present_3_check.actions | selectattr('status', 'eq', 'Recreating') | length == 0
-          - present_3_check.warnings | default([]) | select('regex', ' Please report this at ') | length == 0
+          - present_3_check.warnings | default([]) | select('regex', ' please report this at ') | length == 0
           - present_3 is not changed
           - (present_3.actions | selectattr('status', 'eq', 'Pulling') | first) is truthy
           - present_3.actions | selectattr('status', 'eq', 'Creating') | length == 0
           - present_3.actions | selectattr('status', 'eq', 'Recreating') | length == 0
-          - present_3.warnings | default([]) | select('regex', ' Please report this at ') | length == 0
+          - present_3.warnings | default([]) | select('regex', ' please report this at ') | length == 0
           - present_4_check is changed
           - present_4_check.actions | selectattr('status', 'eq', 'Pulling') | length == 0
-          - present_4_check.warnings | default([]) | select('regex', ' Please report this at ') | length == 0
+          - present_4_check.warnings | default([]) | select('regex', ' please report this at ') | length == 0
           - present_4 is changed
           - present_4.actions | selectattr('status', 'eq', 'Pulling') | length == 0
-          - present_4.warnings | default([]) | select('regex', ' Please report this at ') | length == 0
+          - present_4.warnings | default([]) | select('regex', ' please report this at ') | length == 0
           - present_5_check is not changed
-          - present_5_check.warnings | default([]) | select('regex', ' Please report this at ') | length == 0
+          - present_5_check.warnings | default([]) | select('regex', ' please report this at ') | length == 0
           - present_5 is not changed
-          - present_5.warnings | default([]) | select('regex', ' Please report this at ') | length == 0
+          - present_5.warnings | default([]) | select('regex', ' please report this at ') | length == 0

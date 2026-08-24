@@ -4,9 +4,7 @@
 # GNU General Public License v3.0+ (see LICENSES/GPL-3.0-or-later.txt or https://www.gnu.org/licenses/gpl-3.0.txt)
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from __future__ import absolute_import, division, print_function
-__metaclass__ = type
-
+from __future__ import annotations
 
 DOCUMENTATION = r"""
 module: docker_image_pull
@@ -18,9 +16,9 @@ version_added: 3.6.0
 description:
   - Pulls a Docker image from a registry.
 extends_documentation_fragment:
-  - community.docker.docker.api_documentation
-  - community.docker.attributes
-  - community.docker.attributes.actiongroup_docker
+  - community.docker._docker.api_documentation
+  - community.docker._attributes
+  - community.docker._attributes.actiongroup_docker
 
 attributes:
   check_mode:
@@ -75,6 +73,7 @@ seealso:
 """
 
 EXAMPLES = r"""
+---
 - name: Pull an image
   community.docker.docker_image_pull:
     name: pacur/centos-7
@@ -91,58 +90,56 @@ image:
 """
 
 import traceback
+import typing as t
 
-from ansible.module_utils.common.text.converters import to_native
-
-from ansible_collections.community.docker.plugins.module_utils.common_api import (
+from ansible_collections.community.docker.plugins.module_utils._api.errors import (
+    DockerException,
+)
+from ansible_collections.community.docker.plugins.module_utils._api.utils.utils import (
+    parse_repository_tag,
+)
+from ansible_collections.community.docker.plugins.module_utils._common_api import (
     AnsibleDockerClient,
     RequestException,
 )
-
-from ansible_collections.community.docker.plugins.module_utils.util import (
+from ansible_collections.community.docker.plugins.module_utils._platform import (
+    compare_platform_strings,
+    compose_platform_string,
+    normalize_platform_string,
+)
+from ansible_collections.community.docker.plugins.module_utils._util import (
     DockerBaseClass,
     is_image_name_id,
     is_valid_tag,
 )
 
-from ansible_collections.community.docker.plugins.module_utils._api.errors import DockerException
-from ansible_collections.community.docker.plugins.module_utils._api.utils.utils import (
-    parse_repository_tag,
-)
 
-from ansible_collections.community.docker.plugins.module_utils._platform import (
-    normalize_platform_string,
-    compare_platform_strings,
-    compose_platform_string,
-)
-
-
-def image_info(image):
+def image_info(image: dict[str, t.Any] | None) -> dict[str, t.Any]:
     result = {}
     if image:
-        result['id'] = image['Id']
+        result["id"] = image["Id"]
     else:
-        result['exists'] = False
+        result["exists"] = False
     return result
 
 
 class ImagePuller(DockerBaseClass):
-    def __init__(self, client):
-        super(ImagePuller, self).__init__()
+    def __init__(self, client: AnsibleDockerClient) -> None:
+        super().__init__()
 
         self.client = client
         self.check_mode = self.client.check_mode
 
         parameters = self.client.module.params
-        self.name = parameters['name']
-        self.tag = parameters['tag']
-        self.platform = parameters['platform']
-        self.pull_mode = parameters['pull']
+        self.name: str = parameters["name"]
+        self.tag: str = parameters["tag"]
+        self.platform: str | None = parameters["platform"]
+        self.pull_mode: t.Literal["always", "not_present"] = parameters["pull"]
 
         if is_image_name_id(self.name):
             self.client.fail("Cannot pull an image by ID")
         if not is_valid_tag(self.tag, allow_empty=True):
-            self.client.fail('"{0}" is not a valid docker tag!'.format(self.tag))
+            self.client.fail(f'"{self.tag}" is not a valid docker tag!')
 
         # If name contains a tag, it takes precedence over tag parameter.
         repo, repo_tag = parse_repository_tag(self.name)
@@ -150,57 +147,66 @@ class ImagePuller(DockerBaseClass):
             self.name = repo
             self.tag = repo_tag
 
-    def pull(self):
+    def pull(self) -> dict[str, t.Any]:
         image = self.client.find_image(name=self.name, tag=self.tag)
-        results = dict(
-            changed=False,
-            actions=[],
-            image=image or {},
-            diff=dict(before=image_info(image), after=image_info(image)),
-        )
+        actions: list[str] = []
+        diff = {"before": image_info(image), "after": image_info(image)}
+        results = {
+            "changed": False,
+            "actions": actions,
+            "image": image or {},
+            "diff": diff,
+        }
 
-        if image and self.pull_mode == 'not_present':
+        if image and self.pull_mode == "not_present":
             if self.platform is None:
                 return results
             host_info = self.client.info()
             wanted_platform = normalize_platform_string(
                 self.platform,
-                daemon_os=host_info.get('OSType'),
-                daemon_arch=host_info.get('Architecture'),
+                daemon_os=host_info.get("OSType"),
+                daemon_arch=host_info.get("Architecture"),
             )
             image_platform = compose_platform_string(
-                os=image.get('Os'),
-                arch=image.get('Architecture'),
-                variant=image.get('Variant'),
-                daemon_os=host_info.get('OSType'),
-                daemon_arch=host_info.get('Architecture'),
+                os=image.get("Os"),
+                arch=image.get("Architecture"),
+                variant=image.get("Variant"),
+                daemon_os=host_info.get("OSType"),
+                daemon_arch=host_info.get("Architecture"),
             )
             if compare_platform_strings(wanted_platform, image_platform):
                 return results
 
-        results['actions'].append('Pulled image %s:%s' % (self.name, self.tag))
+        actions.append(f"Pulled image {self.name}:{self.tag}")
         if self.check_mode:
-            results['changed'] = True
-            results['diff']['after'] = image_info(dict(Id='unknown'))
+            results["changed"] = True
+            diff["after"] = image_info({"Id": "unknown"})
         else:
-            results['image'], not_changed = self.client.pull_image(self.name, tag=self.tag, platform=self.platform)
-            results['changed'] = not not_changed
-            results['diff']['after'] = image_info(results['image'])
+            image, not_changed = self.client.pull_image(
+                self.name, tag=self.tag, image_platform=self.platform
+            )
+            results["image"] = image
+            results["changed"] = not not_changed
+            diff["after"] = image_info(image)
 
         return results
 
 
-def main():
-    argument_spec = dict(
-        name=dict(type='str', required=True),
-        tag=dict(type='str', default='latest'),
-        platform=dict(type='str'),
-        pull=dict(type='str', choices=['always', 'not_present'], default='always'),
-    )
+def main() -> None:
+    argument_spec = {
+        "name": {"type": "str", "required": True},
+        "tag": {"type": "str", "default": "latest"},
+        "platform": {"type": "str"},
+        "pull": {
+            "type": "str",
+            "choices": ["always", "not_present"],
+            "default": "always",
+        },
+    }
 
-    option_minimal_versions = dict(
-        platform=dict(docker_api_version='1.32'),
-    )
+    option_minimal_versions = {
+        "platform": {"docker_api_version": "1.32"},
+    }
 
     client = AnsibleDockerClient(
         argument_spec=argument_spec,
@@ -212,12 +218,16 @@ def main():
         results = ImagePuller(client).pull()
         client.module.exit_json(**results)
     except DockerException as e:
-        client.fail('An unexpected Docker error occurred: {0}'.format(to_native(e)), exception=traceback.format_exc())
+        client.fail(
+            f"An unexpected Docker error occurred: {e}",
+            exception=traceback.format_exc(),
+        )
     except RequestException as e:
         client.fail(
-            'An unexpected requests error occurred when trying to talk to the Docker daemon: {0}'.format(to_native(e)),
-            exception=traceback.format_exc())
+            f"An unexpected requests error occurred when trying to talk to the Docker daemon: {e}",
+            exception=traceback.format_exc(),
+        )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

@@ -4,9 +4,7 @@
 # GNU General Public License v3.0+ (see LICENSES/GPL-3.0-or-later.txt or https://www.gnu.org/licenses/gpl-3.0.txt)
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from __future__ import absolute_import, division, print_function
-
-__metaclass__ = type
+from __future__ import annotations
 
 DOCUMENTATION = r"""
 module: docker_node
@@ -15,10 +13,10 @@ description:
   - Manages the Docker nodes through a Swarm Manager.
   - This module allows to change the node's role, its availability, and to modify, add or remove node labels.
 extends_documentation_fragment:
-  - community.docker.docker
-  - community.docker.docker.docker_py_1_documentation
-  - community.docker.attributes
-  - community.docker.attributes.actiongroup_docker
+  - community.docker._docker
+  - community.docker._docker.docker_py_2_documentation
+  - community.docker._attributes
+  - community.docker._attributes.actiongroup_docker
 
 attributes:
   check_mode:
@@ -90,6 +88,7 @@ author:
 """
 
 EXAMPLES = r"""
+---
 - name: Set node role
   community.docker.docker_node:
     hostname: mynode
@@ -134,37 +133,42 @@ node:
 """
 
 import traceback
+import typing as t
 
 try:
-    from docker.errors import DockerException, APIError
+    from docker.errors import APIError, DockerException
 except ImportError:
     # missing Docker SDK for Python handled in ansible.module_utils.docker.common
     pass
 
-from ansible_collections.community.docker.plugins.module_utils.common import (
-    DockerBaseClass,
+from ansible.module_utils.common.text.converters import to_text
+
+from ansible_collections.community.docker.plugins.module_utils._common import (
     RequestException,
 )
-
-from ansible.module_utils.common.text.converters import to_native
-
-from ansible_collections.community.docker.plugins.module_utils.swarm import AnsibleDockerSwarmClient
-from ansible_collections.community.docker.plugins.module_utils.util import sanitize_labels
+from ansible_collections.community.docker.plugins.module_utils._swarm import (
+    AnsibleDockerSwarmClient,
+)
+from ansible_collections.community.docker.plugins.module_utils._util import (
+    DockerBaseClass,
+    sanitize_labels,
+)
 
 
 class TaskParameters(DockerBaseClass):
-    def __init__(self, client):
-        super(TaskParameters, self).__init__()
+    hostname: str
+
+    def __init__(self, client: AnsibleDockerSwarmClient) -> None:
+        super().__init__()
 
         # Spec
-        self.name = None
-        self.labels = None
-        self.labels_state = None
-        self.labels_to_remove = None
+        self.labels: dict[str, t.Any] | None = None
+        self.labels_state: t.Literal["merge", "replace"] = "merge"
+        self.labels_to_remove: list[str] | None = None
 
         # Node
-        self.availability = None
-        self.role = None
+        self.availability: t.Literal["active", "pause", "drain"] | None = None
+        self.role: t.Literal["worker", "manager"] | None = None
 
         for key, value in client.module.params.items():
             setattr(self, key, value)
@@ -173,10 +177,10 @@ class TaskParameters(DockerBaseClass):
 
 
 class SwarmNodeManager(DockerBaseClass):
-
-    def __init__(self, client, results):
-
-        super(SwarmNodeManager, self).__init__()
+    def __init__(
+        self, client: AnsibleDockerSwarmClient, results: dict[str, t.Any]
+    ) -> None:
+        super().__init__()
 
         self.client = client
         self.results = results
@@ -188,10 +192,9 @@ class SwarmNodeManager(DockerBaseClass):
 
         self.node_update()
 
-    def node_update(self):
+    def node_update(self) -> None:
         if not (self.client.check_if_swarm_node(node_id=self.parameters.hostname)):
             self.client.fail("This node is not part of a swarm.")
-            return
 
         if self.client.check_if_swarm_node_is_down():
             self.client.fail("Can not update the node. The node is down.")
@@ -199,107 +202,119 @@ class SwarmNodeManager(DockerBaseClass):
         try:
             node_info = self.client.inspect_node(node_id=self.parameters.hostname)
         except APIError as exc:
-            self.client.fail("Failed to get node information for %s" % to_native(exc))
+            self.client.fail(f"Failed to get node information for {exc}")
 
         changed = False
-        node_spec = dict(
-            Availability=self.parameters.availability,
-            Role=self.parameters.role,
-            Labels=self.parameters.labels,
-        )
+        node_spec: dict[str, t.Any] = {
+            "Availability": self.parameters.availability,
+            "Role": self.parameters.role,
+            "Labels": self.parameters.labels,
+        }
 
         if self.parameters.role is None:
-            node_spec['Role'] = node_info['Spec']['Role']
+            node_spec["Role"] = node_info["Spec"]["Role"]
         else:
-            if not node_info['Spec']['Role'] == self.parameters.role:
-                node_spec['Role'] = self.parameters.role
+            if node_info["Spec"]["Role"] != self.parameters.role:
+                node_spec["Role"] = self.parameters.role
                 changed = True
 
         if self.parameters.availability is None:
-            node_spec['Availability'] = node_info['Spec']['Availability']
+            node_spec["Availability"] = node_info["Spec"]["Availability"]
         else:
-            if not node_info['Spec']['Availability'] == self.parameters.availability:
-                node_info['Spec']['Availability'] = self.parameters.availability
+            if node_info["Spec"]["Availability"] != self.parameters.availability:
+                node_info["Spec"]["Availability"] = self.parameters.availability
                 changed = True
 
-        if self.parameters.labels_state == 'replace':
+        if self.parameters.labels_state == "replace":
             if self.parameters.labels is None:
-                node_spec['Labels'] = {}
-                if node_info['Spec']['Labels']:
+                node_spec["Labels"] = {}
+                if node_info["Spec"]["Labels"]:
                     changed = True
             else:
-                if (node_info['Spec']['Labels'] or {}) != self.parameters.labels:
-                    node_spec['Labels'] = self.parameters.labels
+                if (node_info["Spec"]["Labels"] or {}) != self.parameters.labels:
+                    node_spec["Labels"] = self.parameters.labels
                     changed = True
-        elif self.parameters.labels_state == 'merge':
-            node_spec['Labels'] = dict(node_info['Spec']['Labels'] or {})
+        elif self.parameters.labels_state == "merge":
+            labels: dict[str, str] = dict(node_info["Spec"]["Labels"] or {})
+            node_spec["Labels"] = labels
             if self.parameters.labels is not None:
                 for key, value in self.parameters.labels.items():
-                    if node_spec['Labels'].get(key) != value:
-                        node_spec['Labels'][key] = value
+                    if labels.get(key) != value:
+                        labels[key] = value
                         changed = True
 
             if self.parameters.labels_to_remove is not None:
                 for key in self.parameters.labels_to_remove:
                     if self.parameters.labels is not None:
                         if not self.parameters.labels.get(key):
-                            if node_spec['Labels'].get(key):
-                                node_spec['Labels'].pop(key)
+                            if node_spec["Labels"].get(key):
+                                node_spec["Labels"].pop(key)
                                 changed = True
                         else:
                             self.client.module.warn(
-                                "Label '%s' listed both in 'labels' and 'labels_to_remove'. "
+                                f"Label '{to_text(key)}' listed both in 'labels' and 'labels_to_remove'. "
                                 "Keeping the assigned label value."
-                                % to_native(key))
+                            )
                     else:
-                        if node_spec['Labels'].get(key):
-                            node_spec['Labels'].pop(key)
+                        if node_spec["Labels"].get(key):
+                            node_spec["Labels"].pop(key)
                             changed = True
 
         if changed is True:
             if not self.check_mode:
                 try:
-                    self.client.update_node(node_id=node_info['ID'], version=node_info['Version']['Index'],
-                                            node_spec=node_spec)
+                    self.client.update_node(
+                        node_id=node_info["ID"],
+                        version=node_info["Version"]["Index"],
+                        node_spec=node_spec,
+                    )
                 except APIError as exc:
-                    self.client.fail("Failed to update node : %s" % to_native(exc))
-            self.results['node'] = self.client.get_node_inspect(node_id=node_info['ID'])
-            self.results['changed'] = changed
+                    self.client.fail(f"Failed to update node : {exc}")
+            self.results["node"] = self.client.get_node_inspect(node_id=node_info["ID"])
+            self.results["changed"] = changed
         else:
-            self.results['node'] = node_info
-            self.results['changed'] = changed
+            self.results["node"] = node_info
+            self.results["changed"] = changed
 
 
-def main():
-    argument_spec = dict(
-        hostname=dict(type='str', required=True),
-        labels=dict(type='dict'),
-        labels_state=dict(type='str', default='merge', choices=['merge', 'replace']),
-        labels_to_remove=dict(type='list', elements='str'),
-        availability=dict(type='str', choices=['active', 'pause', 'drain']),
-        role=dict(type='str', choices=['worker', 'manager']),
-    )
+def main() -> None:
+    argument_spec = {
+        "hostname": {"type": "str", "required": True},
+        "labels": {"type": "dict"},
+        "labels_state": {
+            "type": "str",
+            "default": "merge",
+            "choices": ["merge", "replace"],
+        },
+        "labels_to_remove": {"type": "list", "elements": "str"},
+        "availability": {"type": "str", "choices": ["active", "pause", "drain"]},
+        "role": {"type": "str", "choices": ["worker", "manager"]},
+    }
 
     client = AnsibleDockerSwarmClient(
         argument_spec=argument_spec,
         supports_check_mode=True,
-        min_docker_version='2.4.0',
+        min_docker_version="2.4.0",
     )
 
     try:
-        results = dict(
-            changed=False,
-        )
+        results = {
+            "changed": False,
+        }
 
         SwarmNodeManager(client, results)
         client.module.exit_json(**results)
     except DockerException as e:
-        client.fail('An unexpected docker error occurred: {0}'.format(to_native(e)), exception=traceback.format_exc())
+        client.fail(
+            f"An unexpected Docker error occurred: {e}",
+            exception=traceback.format_exc(),
+        )
     except RequestException as e:
         client.fail(
-            'An unexpected requests error occurred when Docker SDK for Python tried to talk to the docker daemon: {0}'.format(to_native(e)),
-            exception=traceback.format_exc())
+            f"An unexpected requests error occurred when Docker SDK for Python tried to talk to the docker daemon: {e}",
+            exception=traceback.format_exc(),
+        )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

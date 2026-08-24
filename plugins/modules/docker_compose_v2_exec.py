@@ -4,9 +4,7 @@
 # GNU General Public License v3.0+ (see LICENSES/GPL-3.0-or-later.txt or https://www.gnu.org/licenses/gpl-3.0.txt)
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from __future__ import absolute_import, division, print_function
-__metaclass__ = type
-
+from __future__ import annotations
 
 DOCUMENTATION = r"""
 module: docker_compose_v2_exec
@@ -19,11 +17,11 @@ description:
   - Uses Docker Compose to run a command in a service's container.
   - This can be used to run one-off commands in an existing service's container, and encapsulates C(docker compose exec).
 extends_documentation_fragment:
-  - community.docker.compose_v2
-  - community.docker.compose_v2.minimum_version
-  - community.docker.docker.cli_documentation
-  - community.docker.attributes
-  - community.docker.attributes.actiongroup_docker
+  - community.docker._compose_v2
+  - community.docker._compose_v2.minimum_version
+  - community.docker._docker.cli_documentation
+  - community.docker._attributes
+  - community.docker._attributes.actiongroup_docker
 
 attributes:
   check_mode:
@@ -119,6 +117,7 @@ notes:
 """
 
 EXAMPLES = r"""
+---
 - name: Run a simple command (command)
   community.docker.docker_compose_v2_exec:
     service: foo
@@ -166,128 +165,131 @@ rc:
 
 import shlex
 import traceback
+import typing as t
 
-from ansible.module_utils.common.text.converters import to_text, to_native
-from ansible.module_utils.six import string_types
+from ansible.module_utils.common.text.converters import to_text
 
-from ansible_collections.community.docker.plugins.module_utils.common_cli import (
+from ansible_collections.community.docker.plugins.module_utils._common_cli import (
     AnsibleModuleDockerClient,
     DockerException,
 )
-
-from ansible_collections.community.docker.plugins.module_utils.compose_v2 import (
+from ansible_collections.community.docker.plugins.module_utils._compose_v2 import (
     BaseComposeManager,
     common_compose_argspec_ex,
 )
 
 
 class ExecManager(BaseComposeManager):
-    def __init__(self, client):
-        super(ExecManager, self).__init__(client)
+    def __init__(self, client: AnsibleModuleDockerClient) -> None:
+        super().__init__(client)
         parameters = self.client.module.params
 
-        self.service = parameters['service']
-        self.index = parameters['index']
-        self.chdir = parameters['chdir']
-        self.detach = parameters['detach']
-        self.user = parameters['user']
-        self.stdin = parameters['stdin']
-        self.strip_empty_ends = parameters['strip_empty_ends']
-        self.privileged = parameters['privileged']
-        self.tty = parameters['tty']
-        self.env = parameters['env']
+        self.service: str = parameters["service"]
+        self.index: int | None = parameters["index"]
+        self.chdir: str | None = parameters["chdir"]
+        self.detach: bool = parameters["detach"]
+        self.user: str | None = parameters["user"]
+        self.stdin: str | None = parameters["stdin"]
+        self.strip_empty_ends: bool = parameters["strip_empty_ends"]
+        self.privileged: bool = parameters["privileged"]
+        self.tty: bool = parameters["tty"]
+        self.env: dict[str, t.Any] = parameters["env"]
 
-        self.argv = parameters['argv']
-        if parameters['command'] is not None:
-            self.argv = shlex.split(parameters['command'])
+        self.argv: list[str]
+        if parameters["command"] is not None:
+            self.argv = shlex.split(parameters["command"])
+        else:
+            self.argv = parameters["argv"]
 
         if self.detach and self.stdin is not None:
-            self.mail('If detach=true, stdin cannot be provided.')
+            self.fail("If detach=true, stdin cannot be provided.")
 
-        if self.stdin is not None and parameters['stdin_add_newline']:
-            self.stdin += '\n'
+        stdin_add_newline: bool = parameters["stdin_add_newline"]
+        if self.stdin is not None and stdin_add_newline:
+            self.stdin += "\n"
 
         if self.env is not None:
-            for name, value in list(self.env.items()):
-                if not isinstance(value, string_types):
+            for name, value in self.env.items():
+                if not isinstance(value, str):
                     self.fail(
                         "Non-string value found for env option. Ambiguous env options must be "
-                        "wrapped in quotes to avoid them being interpreted. Key: %s" % (name, )
+                        "wrapped in quotes to avoid them being interpreted when directly specified "
+                        "in YAML, or explicitly converted to strings when the option is templated. "
+                        f"Key: {name}"
                     )
-                self.env[name] = to_text(value, errors='surrogate_or_strict')
 
-    def get_exec_cmd(self, dry_run, no_start=False):
-        args = self.get_base_args(plain_progress=True) + ['exec']
+    def get_exec_cmd(self, dry_run: bool) -> list[str]:
+        args = self.get_base_args(plain_progress=True) + ["exec"]
         if self.index is not None:
-            args.extend(['--index', str(self.index)])
+            args.extend(["--index", str(self.index)])
         if self.chdir is not None:
-            args.extend(['--workdir', self.chdir])
+            args.extend(["--workdir", self.chdir])
         if self.detach:
-            args.extend(['--detach'])
+            args.extend(["--detach"])
         if self.user is not None:
-            args.extend(['--user', self.user])
+            args.extend(["--user", self.user])
         if self.privileged:
-            args.append('--privileged')
+            args.append("--privileged")
         if not self.tty:
-            args.append('--no-TTY')
+            args.append("--no-TTY")
         if self.env:
             for name, value in list(self.env.items()):
-                args.append('--env')
-                args.append('{0}={1}'.format(name, value))
-        args.append('--')
+                args.append("--env")
+                args.append(f"{name}={value}")
+        args.append("--")
         args.append(self.service)
         args.extend(self.argv)
         return args
 
-    def run(self):
+    def run(self) -> dict[str, t.Any]:
         args = self.get_exec_cmd(self.check_mode)
-        kwargs = {
-            'cwd': self.project_src,
+        kwargs: dict[str, t.Any] = {
+            "cwd": self.project_src,
         }
         if self.stdin is not None:
-            kwargs['data'] = self.stdin.encode('utf-8')
+            kwargs["data"] = self.stdin.encode("utf-8")
         if self.detach:
-            kwargs['check_rc'] = True
-        rc, stdout, stderr = self.client.call_cli(*args, **kwargs)
+            kwargs["check_rc"] = True
+        rc, stdout_b, stderr_b = self.client.call_cli(*args, **kwargs)
         if self.detach:
             return {}
-        stdout = to_text(stdout)
-        stderr = to_text(stderr)
+        stdout = to_text(stdout_b)
+        stderr = to_text(stderr_b)
         if self.strip_empty_ends:
-            stdout = stdout.rstrip('\r\n')
-            stderr = stderr.rstrip('\r\n')
+            stdout = stdout.rstrip("\r\n")
+            stderr = stderr.rstrip("\r\n")
         return {
-            'changed': True,
-            'rc': rc,
-            'stdout': stdout,
-            'stderr': stderr,
+            "changed": True,
+            "rc": rc,
+            "stdout": stdout,
+            "stderr": stderr,
         }
 
 
-def main():
-    argument_spec = dict(
-        service=dict(type='str', required=True),
-        index=dict(type='int'),
-        argv=dict(type='list', elements='str'),
-        command=dict(type='str'),
-        chdir=dict(type='str'),
-        detach=dict(type='bool', default=False),
-        user=dict(type='str'),
-        stdin=dict(type='str'),
-        stdin_add_newline=dict(type='bool', default=True),
-        strip_empty_ends=dict(type='bool', default=True),
-        privileged=dict(type='bool', default=False),
-        tty=dict(type='bool', default=True),
-        env=dict(type='dict'),
-    )
+def main() -> None:
+    argument_spec = {
+        "service": {"type": "str", "required": True},
+        "index": {"type": "int"},
+        "argv": {"type": "list", "elements": "str"},
+        "command": {"type": "str"},
+        "chdir": {"type": "str"},
+        "detach": {"type": "bool", "default": False},
+        "user": {"type": "str"},
+        "stdin": {"type": "str"},
+        "stdin_add_newline": {"type": "bool", "default": True},
+        "strip_empty_ends": {"type": "bool", "default": True},
+        "privileged": {"type": "bool", "default": False},
+        "tty": {"type": "bool", "default": True},
+        "env": {"type": "dict"},
+    }
     argspec_ex = common_compose_argspec_ex()
-    argument_spec.update(argspec_ex.pop('argspec'))
+    argument_spec.update(argspec_ex.pop("argspec"))
 
     client = AnsibleModuleDockerClient(
         argument_spec=argument_spec,
         supports_check_mode=False,
         needs_api_version=False,
-        **argspec_ex
+        **argspec_ex,
     )
 
     try:
@@ -296,8 +298,11 @@ def main():
         manager.cleanup()
         client.module.exit_json(**result)
     except DockerException as e:
-        client.fail('An unexpected docker error occurred: {0}'.format(to_native(e)), exception=traceback.format_exc())
+        client.fail(
+            f"An unexpected Docker error occurred: {e}",
+            exception=traceback.format_exc(),
+        )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

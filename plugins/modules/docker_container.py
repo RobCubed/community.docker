@@ -4,9 +4,7 @@
 # GNU General Public License v3.0+ (see LICENSES/GPL-3.0-or-later.txt or https://www.gnu.org/licenses/gpl-3.0.txt)
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from __future__ import absolute_import, division, print_function
-__metaclass__ = type
-
+from __future__ import annotations
 
 DOCUMENTATION = r"""
 module: docker_container
@@ -24,9 +22,9 @@ notes:
     (except O(image)). Therefore, always specify B(all) options relevant to the container.
   - When O(restart) is set to V(true), the module will only restart the container if no config changes are detected.
 extends_documentation_fragment:
-  - community.docker.docker.api_documentation
-  - community.docker.attributes
-  - community.docker.attributes.actiongroup_docker
+  - community.docker._docker.api_documentation
+  - community.docker._attributes
+  - community.docker._attributes.actiongroup_docker
 
 attributes:
   check_mode:
@@ -580,12 +578,16 @@ options:
         description:
           - The mount type.
           - Note that V(npipe) is only supported by Docker for Windows.
+          - V(cluster) requires Docker API 1.42+ and has been added in community.docker 4.8.0.
+          - V(image) requires Docker API 1.47+ and has been added in community.docker 4.8.0.
         type: str
         choices:
           - bind
           - npipe
           - tmpfs
           - volume
+          - cluster
+          - image
         default: volume
       read_only:
         description:
@@ -600,6 +602,13 @@ options:
           - consistent
           - default
           - delegated
+      create_mountpoint:
+        description:
+          - Create mount point on host if missing.
+          - Requires Docker API 1.42+.
+          - Only valid for O(mounts[].type=bind).
+        type: bool
+        version_added: 4.8.0
       propagation:
         description:
           - Propagation mode. Only valid for the V(bind) type.
@@ -616,6 +625,27 @@ options:
           - False if the volume should be populated with the data from the target. Only valid for the V(volume) type.
           - The default value is V(false).
         type: bool
+      non_recursive:
+        description:
+          - Disable recursive bind mount.
+          - Requires Docker API 1.40+.
+          - Only valid for O(mounts[].type=bind).
+        type: bool
+        version_added: 4.8.0
+      read_only_non_recursive:
+        description:
+          - Make the mount non-recursively read-only, but still leave the mount recursive (unless NonRecursive is set to true in conjunction).
+          - Requires Docker API 1.44+.
+          - Only valid for O(mounts[].type=bind).
+        type: bool
+        version_added: 4.8.0
+      read_only_force_recursive:
+        description:
+          - Raise an error if the mount cannot be made recursively read-only.
+          - Requires Docker API 1.44+.
+          - Only valid for O(mounts[].type=bind).
+        type: bool
+        version_added: 4.8.0
       labels:
         description:
           - User-defined name and labels for the volume. Only valid for the V(volume) type.
@@ -630,6 +660,13 @@ options:
           - Dictionary of options specific to the chosen volume_driver. See L(here,https://docs.docker.com/storage/volumes/#use-a-volume-driver)
             for details.
         type: dict
+      subpath:
+        type: str
+        description:
+          - Source path inside the volume/image. Must be relative without any back traversals.
+          - Requires Docker API 1.45+.
+          - Only valid for O(mounts[].type=volume) or O(mounts[].type=image).
+        version_added: 4.8.0
       tmpfs_size:
         description:
           - The size for the tmpfs mount in bytes in format <number>[<unit>].
@@ -641,6 +678,16 @@ options:
         description:
           - The permission mode for the tmpfs mount.
         type: str
+      tmpfs_options:
+        type: list
+        elements: dict
+        description:
+          - Options to be passed to the tmpfs mount.
+          - Every list element must be a dictionary with one key and a value.
+            All keys must be strings, and values can be either a string or V(null)/V(none) for a flag.
+          - Requires Docker API 1.46+.
+          - Only valid for O(mounts[].type=tmpfs).
+        version_added: 4.8.0
   name:
     description:
       - Assign a name to a new container or match an existing container.
@@ -703,6 +750,21 @@ options:
             Daemon at least in some cases. When passed on creation, this seems to work better.
         type: str
         version_added: 3.6.0
+      driver_opts:
+        description:
+          - Dictionary of driver options for this network endpoint.
+          - Allows setting endpoint-specific driver options like C(com.docker.network.endpoint.ifname) to set a custom network interface name.
+          - Requires Docker API version 1.32 or newer.
+        type: dict
+        version_added: 5.0.0
+      gw_priority:
+        description:
+          - Gateway priority for this network endpoint.
+          - When a container is connected to multiple networks, this controls which network's gateway is used as the default gateway.
+          - Higher values indicate higher priority.
+          - Requires Docker API version 1.48 or newer.
+        type: int
+        version_added: 5.0.0
   networks_cli_compatible:
     description:
       - If O(networks_cli_compatible=true) (default), this module will behave as C(docker run --network) and will B(not) add
@@ -746,8 +808,9 @@ options:
     description:
       - Platform for the container in the format C(os[/arch[/variant]]).
       - "Note that since community.docker 3.5.0, the module uses both the image's metadata and the Docker daemon's information
-        to normalize platform strings similarly to how Docker itself is doing this. If you notice idempotency problems, L(please
-        create an issue in the community.docker GitHub repository,
+        to normalize platform strings similarly to how Docker itself is doing this. If you notice idempotency problems, please
+        verify whether this is still a problem with the latest release of community.docker, and if it is,
+        L(create an issue in the community.docker GitHub repository,
         https://github.com/ansible-collections/community.docker/issues/new?assignees=&labels=&projects=&template=bug_report.md).
         For older community.docker versions, you can use the O(comparisons) option with C(platform: ignore) to prevent accidental
         recreation of the container due to this."
@@ -996,6 +1059,7 @@ requirements:
 """
 
 EXAMPLES = r"""
+---
 - name: Create a data container
   community.docker.docker_container:
     name: mydata
@@ -1282,19 +1346,18 @@ status:
   sample: 0
 """
 
-from ansible_collections.community.docker.plugins.module_utils.module_container.docker_api import (
+from ansible_collections.community.docker.plugins.module_utils._module_container.docker_api import (
     DockerAPIEngineDriver,
 )
-
-from ansible_collections.community.docker.plugins.module_utils.module_container.module import (
+from ansible_collections.community.docker.plugins.module_utils._module_container.module import (
     run_module,
 )
 
 
-def main():
+def main() -> None:
     engine_driver = DockerAPIEngineDriver()
     run_module(engine_driver)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

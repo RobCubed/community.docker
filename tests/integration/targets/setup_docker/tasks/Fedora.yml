@@ -4,24 +4,24 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 - name: Import GPG key
-  rpm_key:
+  ansible.builtin.rpm_key:
     key: https://download.docker.com/linux/fedora/gpg
     state: present
 
 - name: Add repository
-  yum_repository:
+  ansible.builtin.yum_repository:
     file: docker-ce
     name: docker-ce-stable
     description: Docker CE Stable - $basearch
-    baseurl: https://download.docker.com/linux/fedora/{{ 31 if ansible_facts.distribution_major_version|int > 31 else '$releasever' }}/$basearch/stable
+    baseurl: https://download.docker.com/linux/fedora/{{ 31 if ansible_facts.distribution_major_version | int > 31 else '$releasever' }}/$basearch/stable
     enabled: true
     gpgcheck: true
 
 - name: Update cache
-  command: dnf makecache
+  ansible.builtin.command: dnf makecache
 
 - name: Install docker
-  dnf:
+  ansible.builtin.dnf:
     name: "{{ docker_packages if needs_docker_daemon else docker_cli_packages }}"
     state: present
     enablerepo: docker-ce-test

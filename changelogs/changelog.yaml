@@ -2093,3 +2093,335 @@ releases:
       - 1054-use-correct-flag-for-assume-yes.yaml
       - 4.5.1.yml
     release_date: '2025-03-11'
+  4.5.2:
+    changes:
+      bugfixes:
+        - docker_compose_v2 - fix version check for ``assume_yes`` (https://github.com/ansible-collections/community.docker/pull/1054).
+        - docker_compose_v2 - use ``--yes`` instead of ``-y`` from Docker Compose
+          2.34.0 on (https://github.com/ansible-collections/community.docker/pull/1060).
+      release_summary: Bugfix release.
+    fragments:
+      - 1059-fix-version-check-for-assume-yes.yaml
+      - 1060-compose-yes.yml
+      - 4.5.2.yml
+    release_date: '2025-03-22'
+  4.6.0:
+    changes:
+      minor_changes:
+        - docker_container_copy_into - add ``mode_parse`` parameter which determines
+          how ``mode`` is parsed (https://github.com/ansible-collections/community.docker/pull/1074).
+      release_summary: Feature release.
+    fragments:
+      - 1074-mode-octal.yml
+      - 4.6.0.yml
+    release_date: '2025-05-02'
+  4.6.1:
+    changes:
+      bugfixes:
+        - docker_compose_v2 - handle a (potentially unintentional) breaking change
+          in Docker Compose 2.37.0. Note that ``ContainerName`` is no longer part
+          of the return value (https://github.com/ansible-collections/community.docker/issues/1082,
+          https://github.com/ansible-collections/community.docker/pull/1083).
+        - docker_container - fix idempotency if ``command=[]`` and ``command_handling=correct``
+          (https://github.com/ansible-collections/community.docker/issues/1080, https://github.com/ansible-collections/community.docker/pull/1085).
+      release_summary: Bugfix release.
+    fragments:
+      - 1083-docker_compose_v2-images.yml
+      - 1085-docker_container-command-empty.yml
+      - 4.6.1.yml
+    release_date: '2025-06-09'
+  4.6.2:
+    changes:
+      bugfixes:
+        - docker_compose_v2 - adjust to new dry-run build events in Docker Compose
+          2.39.0+ (https://github.com/ansible-collections/community.docker/pull/1101).
+      release_summary: Bugfix release for Docker Compose 2.39.0+.
+    fragments:
+      - 1101-compose.yml
+      - 4.6.2.yml
+    release_date: '2025-07-26'
+  4.7.0:
+    changes:
+      bugfixes:
+        - docker_image, docker_image_push - work around a bug in Docker 28.3.3 that
+          prevents pushing without authentication to a registry (https://github.com/ansible-collections/community.docker/pull/1110).
+      minor_changes:
+        - docker_swarm_service - add support for ``replicated-job`` mode for Swarm
+          services (https://github.com/ansible-collections/community.docker/issues/626,
+          https://github.com/ansible-collections/community.docker/pull/1108).
+      release_summary: Bugfix and feature release.
+    fragments:
+      - 1108-replicated-job-support.yml
+      - 1110-push-fix.yml
+      - 4.7.0.yml
+    release_date: '2025-08-04'
+  4.8.0:
+    changes:
+      bugfixes:
+        - Avoid deprecated functionality in ansible-core 2.20 (https://github.com/ansible-collections/community.docker/pull/1117).
+      minor_changes:
+        - docker_container - support missing fields and new mount types in ``mounts``
+          (https://github.com/ansible-collections/community.docker/issues/1129, https://github.com/ansible-collections/community.docker/pull/1134).
+      release_summary: Bugfix and feature release.
+    fragments:
+      - 1117-deprecations.yml
+      - 1134-docker_container-mounts.yml
+      - 4.8.0.yml
+    release_date: '2025-10-03'
+  4.8.1:
+    changes:
+      bugfixes:
+        - Avoid remaining usages of deprecated ``ansible.module_utils.six`` (https://github.com/ansible-collections/community.docker/pull/1133).
+        - Avoid usage of deprecated ``ansible.module_utils.six`` in all code that
+          does not have to support Python 2 (https://github.com/ansible-collections/community.docker/pull/1137,
+          https://github.com/ansible-collections/community.docker/pull/1139).
+        - Avoid usage of deprecated ``ansible.module_utils.six`` in some of the code
+          that still supports Python 2 (https://github.com/ansible-collections/community.docker/pull/1138).
+      minor_changes:
+        - Note that some new code in ``plugins/module_utils/_six.py`` is MIT licensed
+          (https://github.com/ansible-collections/community.docker/pull/1138).
+      release_summary: Maintenance release.
+    fragments:
+      - 1137-six.yml
+      - 1138-six.yml
+      - 1139-six.yml
+      - 4.8.1.yml
+    release_date: '2025-10-05'
+  5.0.0-a1:
+    changes:
+      breaking_changes:
+        - All doc fragments, module utils, and plugin utils are from now on private.
+          They can change at any time, and have breaking changes even in bugfix releases
+          (https://github.com/ansible-collections/community.docker/pull/1144).
+      bugfixes:
+        - docker connection plugin - fix crash instead of warning if Docker version
+          does not support ``remote_user`` (https://github.com/ansible-collections/community.docker/pull/1161).
+        - docker, nsenter connection plugins - fix handling of ``become`` plugin password
+          prompt handling in case multiple events arrive at the same time (https://github.com/ansible-collections/community.docker/pull/1158).
+        - docker_api connection plugin - fix bug that could lead to loss of data when
+          waiting for ``become`` plugin prompt (https://github.com/ansible-collections/community.docker/pull/1152).
+        - docker_compose_v2_exec - fix crash instead of reporting error if ``detach=true``
+          and ``stdin`` is provided (https://github.com/ansible-collections/community.docker/pull/1161).
+        - docker_compose_v2_run - fix crash instead of reporting error if ``detach=true``
+          and ``stdin`` is provided (https://github.com/ansible-collections/community.docker/pull/1161).
+        - docker_container_exec - fix bug that could lead to loss of stdout/stderr
+          data (https://github.com/ansible-collections/community.docker/pull/1152).
+        - docker_container_exec - make ``detach=true`` work. So far this resulted
+          in no execution being done (https://github.com/ansible-collections/community.docker/pull/1145).
+        - docker_plugin - fix diff mode for plugin options (https://github.com/ansible-collections/community.docker/pull/1146).
+      minor_changes:
+        - docker_container - add ``driver_opts`` option in ``networks`` (https://github.com/ansible-collections/community.docker/issues/1142,
+          https://github.com/ansible-collections/community.docker/pull/1143).
+        - docker_container - add ``gw_priority`` option in ``networks`` (https://github.com/ansible-collections/community.docker/issues/1142,
+          https://github.com/ansible-collections/community.docker/pull/1143).
+      release_summary: 'First alpha release of community.docker 5.0.0.
+
+
+        The main changes are that the collection dropped support for some ansible-core
+        versions that are End of Life, and thus dropped support for Python 2.7.
+
+        This allowed to modernize the Python code, in particular with type hints.
+
+        Also all module and plugin utils are now private to the collection, which
+        makes it easier to refactor code.
+
+        All these changes should have no effect on end-users.
+
+
+        The current plan is to release 5.0.0 in time for Ansible 13''s feature freeze,
+        so in roughly one week.'
+      removed_features:
+        - Remove support for Docker SDK for Python version 1.x.y, also known as ``docker-py``.
+          Modules and plugins that use Docker SDK for Python require version 2.0.0+
+          (https://github.com/ansible-collections/community.docker/pull/1171).
+        - The collection no longer supports Python 3.6 and before. Note that this
+          coincides with the Python requirements of ansible-core 2.17+ (https://github.com/ansible-collections/community.docker/pull/1123).
+        - The collection no longer supports ansible-core 2.15 and 2.16. You need ansible-core
+          2.17.0 or newer to use community.docker 5.x.y (https://github.com/ansible-collections/community.docker/pull/1123).
+    fragments:
+      - 1142-docker-container-network-driver-opts.yml
+      - 1144-private.yml
+      - 1145-fix.yml
+      - 1146-fix.yml
+      - 1152-fix.yml
+      - 1158-select-fix.yml
+      - 1161-fix.yml
+      - 1171-docker-py.yml
+      - 5.0.0-a1.yml
+      - 5.0.0.yml
+    release_date: '2025-10-25'
+  5.0.0:
+    changes:
+      release_summary: 'New major release.
+
+
+        The main changes are that the collection dropped support for some ansible-core
+
+        versions that are End of Life, and thus dropped support for Python 2.7.
+
+        This allowed to modernize the Python code, in particular with type hints.
+
+        Also all module and plugin utils are now private to the collection, which
+
+        makes it easier to refactor code. All these changes should have no effect
+        on
+
+        end-users.'
+    fragments:
+      - 5.0.0.yml
+    release_date: '2025-11-02'
+  5.0.1:
+    changes:
+      bugfixes:
+        - docker_compose_v2_run - when ``detach=true``, ensure that the returned container
+          ID is not a bytes string (https://github.com/ansible-collections/community.docker/pull/1183).
+        - docker_image - fix 'Cannot locate specified Dockerfile' error (https://github.com/ansible-collections/community.docker/pull/1184).
+      release_summary: Bugfix release.
+    fragments:
+      - 1185-fix.yml
+      - 5.0.1.yml
+      - typing.yml
+    release_date: '2025-11-09'
+  5.0.2:
+    changes:
+      bugfixes:
+        - Docker CLI based modules - work around bug in Docker 29.0.0 that caused
+          a breaking change in ``docker version --format json`` output (https://github.com/ansible-collections/community.docker/issues/1185,
+          https://github.com/ansible-collections/community.docker/pull/1187).
+        - docker_container - fix ``pull`` idempotency with Docker 29.0.0 (https://github.com/ansible-collections/community.docker/pull/1192).
+        - docker_container - fix handling of exposed port ranges. So far, the module
+          used an undocumented feature of Docker that was removed from Docker 29.0.0,
+          that allowed to pass the range to the deamon and let handle it. Now the
+          module explodes ranges into a list of all contained ports, same as the Docker
+          CLI does. For backwards compatibility with Docker < 29.0.0, it also explodes
+          ranges returned by the API for existing containers so that comparison should
+          only indicate a difference if the ranges actually change (https://github.com/ansible-collections/community.docker/pull/1192).
+        - docker_container - fix idempotency for IPv6 addresses with Docker 29.0.0
+          (https://github.com/ansible-collections/community.docker/pull/1192).
+        - docker_image - fix ``source=pull`` idempotency with Docker 29.0.0 (https://github.com/ansible-collections/community.docker/pull/1192).
+        - docker_image, docker_image_push - adjust image push detection to Docker
+          29 (https://github.com/ansible-collections/community.docker/pull/1199).
+        - docker_image_pull - fix idempotency with Docker 29.0.0 (https://github.com/ansible-collections/community.docker/pull/1192).
+        - docker_network - fix idempotency for IPv6 addresses and networks with Docker
+          29.0.0 (https://github.com/ansible-collections/community.docker/pull/1201).
+      known_issues:
+        - docker_image, docker_image_export - idempotency for archiving images depends
+          on whether the image IDs used by the image storage backend correspond to
+          the IDs used in the tarball's ``manifest.json`` files. The new default backend
+          in Docker 29 apparently uses image IDs that no longer correspond, whence
+          idempotency no longer works (https://github.com/ansible-collections/community.docker/pull/1199).
+      release_summary: Bugfix release for Docker 29.
+    fragments:
+      - 1187-docker.yml
+      - 1192-docker_container.yml
+      - 1199-docker_image-push.yml
+      - 1201-docker_network.yml
+      - 5.0.2.yml
+    release_date: '2025-11-16'
+  5.0.3:
+    changes:
+      bugfixes:
+        - docker_container - when the same port is mapped more than once for the same
+          protocol without specifying an interface, a bug caused an invalid value
+          to be passed for the interface (https://github.com/ansible-collections/community.docker/issues/1213,
+          https://github.com/ansible-collections/community.docker/pull/1214).
+      release_summary: Bugfix release.
+    fragments:
+      - 1214-docker_container-ports.yml
+      - 5.0.3.yml
+    release_date: '2025-11-29'
+  5.0.4:
+    changes:
+      bugfixes:
+        - CLI-based modules - when parsing JSON output fails, also provide standard
+          error output. Also provide information on the command and its result in
+          machine-readable way (https://github.com/ansible-collections/community.docker/issues/1216,
+          https://github.com/ansible-collections/community.docker/pull/1221).
+        - docker_compose_v2, docker_compose_v2_pull - adjust parsing from image pull
+          events to changes in Docker Compose 5.0.0 (https://github.com/ansible-collections/community.docker/pull/1219).
+      release_summary: Bugfix release.
+    fragments:
+      - 1219-compose-v2-pull.yml
+      - 1221-cli-json-errors.yml
+      - 5.0.4.yml
+    release_date: '2025-12-06'
+  5.0.5:
+    changes:
+      bugfixes:
+        - modules and plugins using the Docker SDK for Python - do not automatically
+          set ``tls_hostname`` when ``validate_certs=true`` for Docker SDK for Python
+          7.0.0+ (https://github.com/ansible-collections/community.docker/issues/1225,
+          https://github.com/ansible-collections/community.docker/pull/1226).
+      release_summary: Bugfix release.
+    fragments:
+      - 1226-docker-sdk-tls.yml
+      - 5.0.5.yml
+    release_date: '2025-12-31'
+  5.0.6:
+    changes:
+      bugfixes:
+        - docker_image_pull, docker_container - fix pulled image change detection
+          for Docker 29.2+ (https://github.com/ansible-collections/community.docker/pull/1242).
+      release_summary: Bugfix release.
+    fragments:
+      - 1242-pull.yml
+      - 5.0.6.yml
+    release_date: '2026-02-12'
+  5.1.0:
+    changes:
+      minor_changes:
+        - docker_compose_v2_pull - adds ``ignore_pull_failures`` parameter that passes
+          ``--ignore-pull-failures`` to the ``docker compose pull`` call when set
+          to ``true`` (https://github.com/ansible-collections/community.docker/pull/1248).
+      release_summary: Feature release.
+    fragments:
+      - 1248-ignore-pull-failures.yml
+      - 5.1.0.yml
+    release_date: '2026-03-23'
+  5.2.0:
+    changes:
+      minor_changes:
+        - docker_image_export - adds ``platform`` parameter to allow exporting a specific
+          platform variant from a multi-arch image (https://github.com/ansible-collections/community.docker/issues/1064,
+          https://github.com/ansible-collections/community.docker/pull/1251).
+      release_summary: Feature release.
+    fragments:
+      - 1064-docker-image-export-platform.yml
+      - 5.2.0.yml
+    release_date: '2026-04-08'
+  5.2.1:
+    changes:
+      bugfixes:
+        - docker_container_exec module, docker_api connection plugin - ensure that
+          when a command is run in a container with stdin provided, that the actual
+          response is closed and not a socket derived from it. The old behavior causes
+          warnings to be shown on Python 3.13+ under certain conditions (https://github.com/ansible-collections/community.docker/issues/1247,
+          https://github.com/ansible-collections/community.docker/pull/1260).
+      release_summary: Bugfix release.
+    fragments:
+      - 1260-close.yml
+      - 5.2.1.yml
+    release_date: '2026-05-26'
+  5.2.2:
+    changes:
+      bugfixes:
+        - Handle empty 'docker compose images' stdout in case of errors (https://github.com/ansible-collections/community.docker/pull/1305).
+        - docker_api connection plugin - the environment fallbacks for ``docker_host``,
+          ``tls_hostname``, ``api_version``, ``timeout``, ``tls``, and ``validate_certs``
+          now finally work (https://github.com/ansible-collections/community.docker/issues/1298,
+          https://github.com/ansible-collections/community.docker/pull/1299).
+        - docker_containers inventory plugin - the environment fallbacks for ``docker_host``,
+          ``tls_hostname``, ``api_version``, ``timeout``, ``tls``, and ``validate_certs``
+          now finally work (https://github.com/ansible-collections/community.docker/issues/1298,
+          https://github.com/ansible-collections/community.docker/pull/1299).
+        - docker_image, docker_image_pull, docker_container - also handle errors if
+          only ``errorDetail`` is set, but not ``error``. The ``error`` field has
+          been `deprecated in Moby apparently a very long time ago <https://github.com/moby/moby/commit/3043c2641990d94298c6377b7ef14709263a4709>`__
+          (https://github.com/ansible-collections/community.docker/pull/1302).
+      release_summary: Bugfix release.
+    fragments:
+      - 1299-env.yml
+      - 1302-docker-image.yml
+      - 1305-docker-compose.yml
+      - 5.2.2.yml
+    release_date: '2026-08-08'

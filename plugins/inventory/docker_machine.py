@@ -1,10 +1,8 @@
-# -*- coding: utf-8 -*-
 # Copyright (c) 2019, Ximon Eighteen <ximon.eighteen@gmail.com>
 # GNU General Public License v3.0+ (see LICENSES/GPL-3.0-or-later.txt or https://www.gnu.org/licenses/gpl-3.0.txt)
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from __future__ import (absolute_import, division, print_function)
-__metaclass__ = type
+from __future__ import annotations
 
 DOCUMENTATION = r"""
 name: docker_machine
@@ -60,7 +58,7 @@ options:
     version_added: 3.5.0
 """
 
-EXAMPLES = '''
+EXAMPLES = """
 ---
 # Minimal example
 plugin: community.docker.docker_machine
@@ -97,57 +95,75 @@ keyed_groups:
 plugin: community.docker.docker_machine
 compose:
   ansible_ssh_common_args: '"-o StrictHostKeyChecking=accept-new"'
-'''
-
-from ansible.errors import AnsibleError
-from ansible.module_utils.common.text.converters import to_native
-from ansible.module_utils.common.text.converters import to_text
-from ansible.module_utils.common.process import get_bin_path
-from ansible.plugins.inventory import BaseInventoryPlugin, Constructable, Cacheable
-from ansible.utils.display import Display
-
-from ansible_collections.community.docker.plugins.plugin_utils.unsafe import make_unsafe
-from ansible_collections.community.library_inventory_filtering_v1.plugins.plugin_utils.inventory_filter import parse_filters, filter_host
+"""
 
 import json
 import re
 import subprocess
+import typing as t
+
+from ansible.errors import AnsibleError
+from ansible.module_utils.common.process import get_bin_path
+from ansible.module_utils.common.text.converters import to_text
+from ansible.plugins.inventory import BaseInventoryPlugin, Cacheable, Constructable
+from ansible.utils.display import Display
+from ansible_collections.community.library_inventory_filtering_v1.plugins.plugin_utils.inventory_filter import (
+    filter_host,
+    parse_filters,
+)
+
+from ansible_collections.community.docker.plugins.plugin_utils._unsafe import (
+    make_unsafe,
+)
+
+if t.TYPE_CHECKING:
+    from ansible.inventory.data import InventoryData
+    from ansible.parsing.dataloader import DataLoader
+
+    DaemonEnv = t.Literal[
+        "require", "require-silently", "optional", "optional-silently", "skip"
+    ]
+
 
 display = Display()
 
 
 class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
-    ''' Host inventory parser for ansible using Docker machine as source. '''
+    """Host inventory parser for ansible using Docker machine as source."""
 
-    NAME = 'community.docker.docker_machine'
+    NAME = "community.docker.docker_machine"
 
-    DOCKER_MACHINE_PATH = None
+    docker_machine_path: str | None = None
 
-    def _run_command(self, args):
-        if not self.DOCKER_MACHINE_PATH:
+    def _run_command(self, args: list[str]) -> str:
+        if not self.docker_machine_path:
             try:
-                self.DOCKER_MACHINE_PATH = get_bin_path('docker-machine')
+                self.docker_machine_path = get_bin_path("docker-machine")
             except ValueError as e:
-                raise AnsibleError(to_native(e))
+                raise AnsibleError(to_text(e)) from e
 
-        command = [self.DOCKER_MACHINE_PATH]
+        command = [self.docker_machine_path]
         command.extend(args)
-        display.debug('Executing command {0}'.format(command))
+        display.debug(f"Executing command {command}")
         try:
             result = subprocess.check_output(command)
         except subprocess.CalledProcessError as e:
-            display.warning('Exception {0} caught while executing command {1}, this was the original exception: {2}'.format(type(e).__name__, command, e))
+            display.warning(
+                f"Exception {type(e).__name__} caught while executing command {command}, this was the original exception: {e}"
+            )
             raise e
 
         return to_text(result).strip()
 
-    def _get_docker_daemon_variables(self, machine_name):
-        '''
+    def _get_docker_daemon_variables(self, machine_name: str) -> list[tuple[str, str]]:
+        """
         Capture settings from Docker Machine that would be needed to connect to the remote Docker daemon installed on
         the Docker Machine remote host. Note: passing '--shell=sh' is a workaround for 'Error: Unknown shell'.
-        '''
+        """
         try:
-            env_lines = self._run_command(['env', '--shell=sh', machine_name]).splitlines()
+            env_lines = self._run_command(
+                ["env", "--shell=sh", machine_name]
+            ).splitlines()
         except subprocess.CalledProcessError:
             # This can happen when the machine is created but provisioning is incomplete
             return []
@@ -162,22 +178,22 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
 
         # capture any of the DOCKER_xxx variables that were output and create Ansible host vars
         # with the same name and value but with a dm_ name prefix.
-        vars = []
+        env_vars = []
         for line in env_lines:
             match = re.search('(DOCKER_[^=]+)="([^"]+)"', line)
             if match:
                 env_var_name = match.group(1)
                 env_var_value = match.group(2)
-                vars.append((env_var_name, env_var_value))
+                env_vars.append((env_var_name, env_var_value))
 
-        return vars
+        return env_vars
 
-    def _get_machine_names(self):
+    def _get_machine_names(self) -> list[str]:
         # Filter out machines that are not in the Running state as we probably cannot do anything useful actions
         # with them.
-        ls_command = ['ls', '-q']
-        if self.get_option('running_required'):
-            ls_command.extend(['--filter', 'state=Running'])
+        ls_command = ["ls", "-q"]
+        if self.get_option("running_required"):
+            ls_command.extend(["--filter", "state=Running"])
 
         try:
             ls_lines = self._run_command(ls_command)
@@ -186,37 +202,47 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
 
         return ls_lines.splitlines()
 
-    def _inspect_docker_machine_host(self, node):
+    def _inspect_docker_machine_host(self, node: str) -> t.Any | None:
         try:
-            inspect_lines = self._run_command(['inspect', node])
+            inspect_lines = self._run_command(["inspect", node])
         except subprocess.CalledProcessError:
             return None
 
         return json.loads(inspect_lines)
 
-    def _ip_addr_docker_machine_host(self, node):
+    def _ip_addr_docker_machine_host(self, node: str) -> t.Any | None:
         try:
-            ip_addr = self._run_command(['ip', node])
+            ip_addr = self._run_command(["ip", node])
         except subprocess.CalledProcessError:
             return None
 
         return ip_addr
 
-    def _should_skip_host(self, machine_name, env_var_tuples, daemon_env):
+    def _should_skip_host(
+        self,
+        machine_name: str,
+        env_var_tuples: list[tuple[str, str]],
+        daemon_env: DaemonEnv,
+    ) -> bool:
         if not env_var_tuples:
-            warning_prefix = 'Unable to fetch Docker daemon env vars from Docker Machine for host {0}'.format(machine_name)
-            if daemon_env in ('require', 'require-silently'):
-                if daemon_env == 'require':
-                    display.warning('{0}: host will be skipped'.format(warning_prefix))
+            warning_prefix = f"Unable to fetch Docker daemon env vars from Docker Machine for host {machine_name}"
+            if daemon_env in ("require", "require-silently"):
+                if daemon_env == "require":
+                    display.warning(f"{warning_prefix}: host will be skipped")
                 return True
-            else:  # 'optional', 'optional-silently'
-                if daemon_env == 'optional':
-                    display.warning('{0}: host will lack dm_DOCKER_xxx variables'.format(warning_prefix))
+            if daemon_env == "optional":
+                display.warning(
+                    f"{warning_prefix}: host will lack dm_DOCKER_xxx variables"
+                )
+            # daemon_env is 'optional-silently'
         return False
 
-    def _populate(self):
-        daemon_env = self.get_option('daemon_env')
-        filters = parse_filters(self.get_option('filters'))
+    def _populate(self) -> None:
+        if self.inventory is None:
+            raise AssertionError("Inventory must be there")
+
+        daemon_env: DaemonEnv = self.get_option("daemon_env")
+        filters = parse_filters(self.get_option("filters"))
         try:
             for node in self._get_machine_names():
                 node_attrs = self._inspect_docker_machine_host(node)
@@ -225,13 +251,13 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
 
                 unsafe_node_attrs = make_unsafe(node_attrs)
 
-                machine_name = unsafe_node_attrs['Driver']['MachineName']
+                machine_name = unsafe_node_attrs["Driver"]["MachineName"]
                 if not filter_host(self, machine_name, unsafe_node_attrs, filters):
                     continue
 
                 # query `docker-machine env` to obtain remote Docker daemon connection settings in the form of commands
                 # that could be used to set environment variables to influence a local Docker client:
-                if daemon_env == 'skip':
+                if daemon_env == "skip":
                     env_var_tuples = []
                 else:
                     env_var_tuples = self._get_docker_daemon_variables(machine_name)
@@ -244,52 +270,90 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
                 # check for valid ip address from inspect output, else explicitly use ip command to find host ip address
                 # this works around an issue seen with Google Compute Platform where the IP address was not available
                 # via the 'inspect' subcommand but was via the 'ip' subcomannd.
-                if unsafe_node_attrs['Driver']['IPAddress']:
-                    ip_addr = unsafe_node_attrs['Driver']['IPAddress']
+                if unsafe_node_attrs["Driver"]["IPAddress"]:
+                    ip_addr = unsafe_node_attrs["Driver"]["IPAddress"]
                 else:
                     ip_addr = self._ip_addr_docker_machine_host(node)
 
                 # set standard Ansible remote host connection settings to details captured from `docker-machine`
                 # see: https://docs.ansible.com/ansible/latest/user_guide/intro_inventory.html
-                self.inventory.set_variable(machine_name, 'ansible_host', make_unsafe(ip_addr))
-                self.inventory.set_variable(machine_name, 'ansible_port', unsafe_node_attrs['Driver']['SSHPort'])
-                self.inventory.set_variable(machine_name, 'ansible_user', unsafe_node_attrs['Driver']['SSHUser'])
-                self.inventory.set_variable(machine_name, 'ansible_ssh_private_key_file', unsafe_node_attrs['Driver']['SSHKeyPath'])
+                self.inventory.set_variable(
+                    machine_name, "ansible_host", make_unsafe(ip_addr)
+                )
+                self.inventory.set_variable(
+                    machine_name, "ansible_port", unsafe_node_attrs["Driver"]["SSHPort"]
+                )
+                self.inventory.set_variable(
+                    machine_name, "ansible_user", unsafe_node_attrs["Driver"]["SSHUser"]
+                )
+                self.inventory.set_variable(
+                    machine_name,
+                    "ansible_ssh_private_key_file",
+                    unsafe_node_attrs["Driver"]["SSHKeyPath"],
+                )
 
                 # set variables based on Docker Machine tags
-                tags = unsafe_node_attrs['Driver'].get('Tags') or ''
-                self.inventory.set_variable(machine_name, 'dm_tags', make_unsafe(tags))
+                tags = unsafe_node_attrs["Driver"].get("Tags") or ""
+                self.inventory.set_variable(machine_name, "dm_tags", make_unsafe(tags))
 
                 # set variables based on Docker Machine env variables
                 for kv in env_var_tuples:
-                    self.inventory.set_variable(machine_name, 'dm_{0}'.format(kv[0]), make_unsafe(kv[1]))
+                    self.inventory.set_variable(
+                        machine_name, f"dm_{kv[0]}", make_unsafe(kv[1])
+                    )
 
-                if self.get_option('verbose_output'):
-                    self.inventory.set_variable(machine_name, 'docker_machine_node_attributes', unsafe_node_attrs)
+                if self.get_option("verbose_output"):
+                    self.inventory.set_variable(
+                        machine_name,
+                        "docker_machine_node_attributes",
+                        unsafe_node_attrs,
+                    )
 
                 # Use constructed if applicable
-                strict = self.get_option('strict')
+                strict = self.get_option("strict")
 
                 # Composed variables
-                self._set_composite_vars(self.get_option('compose'), unsafe_node_attrs, machine_name, strict=strict)
+                self._set_composite_vars(
+                    self.get_option("compose"),
+                    unsafe_node_attrs,
+                    machine_name,
+                    strict=strict,
+                )
 
                 # Complex groups based on jinja2 conditionals, hosts that meet the conditional are added to group
-                self._add_host_to_composed_groups(self.get_option('groups'), unsafe_node_attrs, machine_name, strict=strict)
+                self._add_host_to_composed_groups(
+                    self.get_option("groups"),
+                    unsafe_node_attrs,
+                    machine_name,
+                    strict=strict,
+                )
 
                 # Create groups based on variable values and add the corresponding hosts to it
-                self._add_host_to_keyed_groups(self.get_option('keyed_groups'), unsafe_node_attrs, machine_name, strict=strict)
+                self._add_host_to_keyed_groups(
+                    self.get_option("keyed_groups"),
+                    unsafe_node_attrs,
+                    machine_name,
+                    strict=strict,
+                )
 
         except Exception as e:
-            raise AnsibleError('Unable to fetch hosts from Docker Machine, this was the original exception: %s' %
-                               to_native(e), orig_exc=e)
+            raise AnsibleError(
+                f"Unable to fetch hosts from Docker Machine, this was the original exception: {e}"
+            ) from e
 
-    def verify_file(self, path):
+    def verify_file(self, path: str) -> bool:
         """Return the possibility of a file being consumable by this plugin."""
-        return (
-            super(InventoryModule, self).verify_file(path) and
-            path.endswith(('docker_machine.yaml', 'docker_machine.yml')))
+        return super().verify_file(path) and path.endswith(
+            ("docker_machine.yaml", "docker_machine.yml")
+        )
 
-    def parse(self, inventory, loader, path, cache=True):
-        super(InventoryModule, self).parse(inventory, loader, path, cache)
+    def parse(
+        self,
+        inventory: InventoryData,
+        loader: DataLoader,
+        path: str,
+        cache: bool = True,
+    ) -> None:
+        super().parse(inventory, loader, path, cache)
         self._read_config_data(path)
         self._populate()

@@ -29,7 +29,7 @@ schedules:
     always: true
     branches:
       include:
-        - stable-3
+        - stable-4
 
 variables:
   - name: checkoutPath
@@ -37,248 +37,116 @@ variables:
   - name: coverageBranches
     value: main
   - name: entryPoint
-    value: tests/utils/shippable/shippable.sh
+    value: tests/utils/shippable/nox.sh
+  - name: prepareEntryPoint
+    value: tests/utils/shippable/nox-prepare.sh
   - name: fetchDepth
     value: 0
 
 resources:
   containers:
     - container: default
-      image: quay.io/ansible/azure-pipelines-test-container:6.0.0
+      image: quay.io/ansible/azure-pipelines-test-container:8.0.0
 
 pool: Standard
 
 stages:
+  - stage: remote_2_19
+    displayName: Remote 2.19
+    dependsOn: []
+    variables:
+      entryPoint: tests/utils/shippable/nox.sh
+    jobs:
+      - template: templates/matrix.yml
+        parameters:
+          targets:
+            - name: Ubuntu 22.04 + group 1
+              test: ansible-test-integration-2.19-ubuntu-22.04-azp-1
+            - name: Ubuntu 22.04 + group 2
+              test: ansible-test-integration-2.19-ubuntu-22.04-azp-2
+            - name: Ubuntu 22.04 + group 3
+              test: ansible-test-integration-2.19-ubuntu-22.04-azp-3
+            - name: Ubuntu 22.04 + group 4
+              test: ansible-test-integration-2.19-ubuntu-22.04-azp-4
+            - name: Ubuntu 22.04 + group 5
+              test: ansible-test-integration-2.19-ubuntu-22.04-azp-5
 
-### Sanity & units
-  - stage: Ansible_devel
-    displayName: Sanity & Units devel
+  - stage: remote_2_20
+    displayName: Remote 2.20
     dependsOn: []
+    variables:
+      entryPoint: tests/utils/shippable/nox.sh
     jobs:
       - template: templates/matrix.yml
         parameters:
           targets:
-            - name: Sanity
-              test: 'devel/sanity/1'
-            - name: Sanity Extra # Only on devel
-              test: 'devel/sanity/extra'
-            - name: Units
-              test: 'devel/units/1'
-  - stage: Ansible_2_18
-    displayName: Sanity & Units 2.18
-    dependsOn: []
-    jobs:
-      - template: templates/matrix.yml
-        parameters:
-          targets:
-            - name: Sanity
-              test: '2.18/sanity/1'
-            - name: Units
-              test: '2.18/units/1'
-  - stage: Ansible_2_17
-    displayName: Sanity & Units 2.17
-    dependsOn: []
-    jobs:
-      - template: templates/matrix.yml
-        parameters:
-          targets:
-            - name: Sanity
-              test: '2.17/sanity/1'
-            - name: Units
-              test: '2.17/units/1'
-  - stage: Ansible_2_16
-    displayName: Sanity & Units 2.16
-    dependsOn: []
-    jobs:
-      - template: templates/matrix.yml
-        parameters:
-          targets:
-            - name: Sanity
-              test: '2.16/sanity/1'
-            - name: Units
-              test: '2.16/units/1'
+            - name: RHEL 9.7 + group 1
+              test: ansible-test-integration-2.20-rhel-9.7-azp-1
+            - name: RHEL 9.7 + group 2
+              test: ansible-test-integration-2.20-rhel-9.7-azp-2
+            - name: RHEL 9.7 + group 3
+              test: ansible-test-integration-2.20-rhel-9.7-azp-3
+            - name: RHEL 9.7 + group 4
+              test: ansible-test-integration-2.20-rhel-9.7-azp-4
+            - name: RHEL 9.7 + group 5
+              test: ansible-test-integration-2.20-rhel-9.7-azp-5
 
-### Docker
-  - stage: Docker_devel
-    displayName: Docker devel
+  - stage: remote_2_21
+    displayName: Remote 2.21
     dependsOn: []
+    variables:
+      entryPoint: tests/utils/shippable/nox.sh
     jobs:
       - template: templates/matrix.yml
         parameters:
-          testFormat: devel/linux/{0}
           targets:
-            - name: Fedora 41
-              test: fedora41
-            - name: Ubuntu 22.04
-              test: ubuntu2204
-            - name: Ubuntu 24.04
-              test: ubuntu2404
-            - name: Alpine 3.21
-              test: alpine321
-          groups:
-            - 4
-            - 5
-  - stage: Docker_2_18
-    displayName: Docker 2.18
-    dependsOn: []
-    jobs:
-      - template: templates/matrix.yml
-        parameters:
-          testFormat: 2.18/linux/{0}
-          targets:
-            - name: Fedora 40
-              test: fedora40
-            - name: Ubuntu 22.04
-              test: ubuntu2204
-            - name: Alpine 3.20
-              test: alpine320
-          groups:
-            - 4
-            - 5
-  - stage: Docker_2_17
-    displayName: Docker 2.17
-    dependsOn: []
-    jobs:
-      - template: templates/matrix.yml
-        parameters:
-          testFormat: 2.17/linux/{0}
-          targets:
-            - name: Fedora 39
-              test: fedora39
-            - name: Ubuntu 20.04
-              test: ubuntu2004
-            - name: Alpine 3.19
-              test: alpine319
-          groups:
-            - 4
-            - 5
-  - stage: Docker_2_16
-    displayName: Docker 2.16
-    dependsOn: []
-    jobs:
-      - template: templates/matrix.yml
-        parameters:
-          testFormat: 2.16/linux/{0}
-          targets:
-            - name: Fedora 38
-              test: fedora38
-            - name: CentOS 7
-              test: centos7
-            - name: openSUSE 15
-              test: opensuse15
-            - name: Alpine 3
-              test: alpine3
-          groups:
-            - 4
-            - 5
+            - name: RHEL 10.1 + group 1
+              test: ansible-test-integration-2.21-rhel-10.1-azp-1
+            - name: RHEL 10.1 + group 2
+              test: ansible-test-integration-2.21-rhel-10.1-azp-2
+            - name: RHEL 10.1 + group 3
+              test: ansible-test-integration-2.21-rhel-10.1-azp-3
+            - name: RHEL 10.1 + group 4
+              test: ansible-test-integration-2.21-rhel-10.1-azp-4
+            - name: RHEL 10.1 + group 5
+              test: ansible-test-integration-2.21-rhel-10.1-azp-5
 
-### Community Docker
-  - stage: Docker_community_devel
-    displayName: Docker (community images) devel
-    dependsOn: []
-    jobs:
-      - template: templates/matrix.yml
-        parameters:
-          testFormat: devel/linux-community/{0}
-          targets:
-            - name: Debian Bullseye
-              test: debian-bullseye/3.9
-            - name: Debian Bookworm
-              test: debian-bookworm/3.11
-            - name: ArchLinux
-              test: archlinux/3.13
-          groups:
-            - 4
-            - 5
-
-### Remote
-  - stage: Remote_devel
+  - stage: remote_devel
     displayName: Remote devel
     dependsOn: []
+    variables:
+      entryPoint: tests/utils/shippable/nox.sh
     jobs:
       - template: templates/matrix.yml
         parameters:
-          testFormat: devel/{0}
           targets:
-            - name: RHEL 9.5 with Docker SDK, urllib3, requests from sources
-              test: rhel/9.5-dev-latest
-          groups:
-            - 1
-            - 2
-            - 3
-            - 4
-            - 5
-  - stage: Remote_2_18
-    displayName: Remote 2.18
-    dependsOn: []
-    jobs:
-      - template: templates/matrix.yml
-        parameters:
-          testFormat: 2.18/{0}
-          targets:
-            - name: RHEL 9.4
-              test: rhel/9.4
-          groups:
-            - 1
-            - 2
-            - 3
-            - 4
-            - 5
-  - stage: Remote_2_17
-    displayName: Remote 2.17
-    dependsOn: []
-    jobs:
-      - template: templates/matrix.yml
-        parameters:
-          testFormat: 2.17/{0}
-          targets:
-            - name: RHEL 9.3
-              test: rhel/9.3
-          groups:
-            - 1
-            - 2
-            - 3
-            - 4
-            - 5
-  - stage: Remote_2_16
-    displayName: Remote 2.16
-    dependsOn: []
-    jobs:
-      - template: templates/matrix.yml
-        parameters:
-          testFormat: 2.16/{0}
-          targets:
-            - name: RHEL 9.2
-              test: rhel/9.2
-            # Currently always hangs in group 2
-            # - name: RHEL 8.8
-            #   test: rhel/8.8
-            - name: RHEL 7.9
-              test: rhel/7.9
-          groups:
-            - 1
-            - 2
-            - 3
-            - 4
-            - 5
-
-  ## Finally
+            - name: RHEL 10.2 + group 1 + sdk-dev-latest
+              test: ansible-test-integration-devel-rhel-10.2-azp-1
+            - name: RHEL 10.2 + group 2 + sdk-dev-latest
+              test: ansible-test-integration-devel-rhel-10.2-azp-2
+            - name: RHEL 10.2 + group 3 + sdk-dev-latest
+              test: ansible-test-integration-devel-rhel-10.2-azp-3
+            - name: RHEL 10.2 + group 4 + sdk-dev-latest
+              test: ansible-test-integration-devel-rhel-10.2-azp-4
+            - name: RHEL 10.2 + group 5 + sdk-dev-latest
+              test: ansible-test-integration-devel-rhel-10.2-azp-5
+            - name: RHEL 9.8 + group 1
+              test: ansible-test-integration-devel-rhel-9.8-azp-1
+            - name: RHEL 9.8 + group 2
+              test: ansible-test-integration-devel-rhel-9.8-azp-2
+            - name: RHEL 9.8 + group 3
+              test: ansible-test-integration-devel-rhel-9.8-azp-3
+            - name: RHEL 9.8 + group 4
+              test: ansible-test-integration-devel-rhel-9.8-azp-4
+            - name: RHEL 9.8 + group 5
+              test: ansible-test-integration-devel-rhel-9.8-azp-5
 
   - stage: Summary
     condition: succeededOrFailed()
     dependsOn:
-      - Ansible_devel
-      - Ansible_2_18
-      - Ansible_2_17
-      - Ansible_2_16
-      - Remote_devel
-      - Remote_2_18
-      - Remote_2_17
-      - Remote_2_16
-      - Docker_devel
-      - Docker_2_18
-      - Docker_2_17
-      - Docker_2_16
-      - Docker_community_devel
+      - remote_2_19
+      - remote_2_20
+      - remote_2_21
+      - remote_devel
     jobs:
       - template: templates/coverage.yml

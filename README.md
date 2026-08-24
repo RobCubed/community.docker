@@ -8,7 +8,7 @@ SPDX-License-Identifier: GPL-3.0-or-later
 
 [![Documentation](https://img.shields.io/badge/docs-brightgreen.svg)](https://docs.ansible.com/ansible/devel/collections/community/docker/)
 [![Build Status](https://dev.azure.com/ansible/community.docker/_apis/build/status/CI?branchName=main)](https://dev.azure.com/ansible/community.docker/_build?definitionId=25)
-[![EOL CI](https://github.com/ansible-collections/community.docker/actions/workflows/ansible-test.yml/badge.svg?branch=main)](https://github.com/ansible-collections/community.docker/actions)
+[![Nox CI](https://github.com/ansible-collections/community.docker/actions/workflows/nox.yml/badge.svg?branch=main)](https://github.com/ansible-collections/community.docker/actions)
 [![Codecov](https://img.shields.io/codecov/c/github/ansible-collections/community.docker)](https://codecov.io/gh/ansible-collections/community.docker)
 [![REUSE status](https://api.reuse.software/badge/github.com/ansible-collections/community.docker)](https://api.reuse.software/info/github.com/ansible-collections/community.docker)
 
@@ -38,7 +38,7 @@ For more information about communication, see the [Ansible communication guide](
 
 ## Tested with Ansible
 
-Tested with the current ansible-core 2.15, ansible-core 2.16, ansible-core 2.17, and ansible-core 2.18 releases, and the current development version of ansible-core. Ansible/ansible-base versions before 2.15.0 are not supported.
+Tested with the current ansible-core 2.17, ansible-core 2.18, ansible-core 2.19, ansible-core 2.20, ansible-core 2.21 releases, and the current development version of ansible-core. Ansible/ansible-base versions before 2.17.0 are not supported.
 
 ## External requirements
 
@@ -161,4 +161,4 @@ See [LICENSES/GPL-3.0-or-later.txt](https://github.com/ansible-collections/commu
 
 Parts of the collection are licensed under the [Apache 2.0 license](https://github.com/ansible-collections/community.docker/blob/main/LICENSES/Apache-2.0.txt). This mostly applies to files vendored from the [Docker SDK for Python](https://github.com/docker/docker-py/).
 
-All files have a machine readable `SDPX-License-Identifier:` comment denoting its respective license(s) or an equivalent entry in an accompanying `.license` file. Only changelog fragments (which will not be part of a release) are covered by a blanket statement in `.reuse/dep5`. This conforms to the [REUSE specification](https://reuse.software/spec/).
+All files have a machine readable `SDPX-License-Identifier:` comment denoting its respective license(s) or an equivalent entry in an accompanying `.license` file. Only changelog fragments (which will not be part of a release) are covered by a blanket statement in `REUSE.toml`. This conforms to the [REUSE specification](https://reuse.software/spec/).

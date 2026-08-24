@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # This code is part of the Ansible collection community.docker, but is an independent component.
 # This particular file, and this file only, is based on the Docker SDK for Python (https://github.com/docker/docker-py/)
 #
@@ -7,18 +6,24 @@
 # It is licensed under the Apache 2.0 license (see LICENSES/Apache-2.0.txt in this collection)
 # SPDX-License-Identifier: Apache-2.0
 
-from __future__ import (absolute_import, division, print_function)
-__metaclass__ = type
+# Note that this module util is **PRIVATE** to the collection. It can have breaking changes at any time.
+# Do not use this from other collections or standalone plugins/modules!
+
+from __future__ import annotations
 
 import errno
 import os
 import select
 import socket as pysocket
 import struct
-
-from ansible.module_utils.six import PY3, binary_type
+import typing as t
 
 from ..transport.npipesocket import NpipeSocket
+
+if t.TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from ..._socket_helper import SocketLike
 
 
 STDOUT = 1
@@ -34,14 +39,14 @@ class SocketError(Exception):
 NPIPE_ENDED = 109
 
 
-def read(socket, n=4096):
+def read(socket: SocketLike, n: int = 4096) -> bytes | None:
     """
     Reads at most n bytes from socket
     """
 
     recoverable_errors = (errno.EINTR, errno.EDEADLK, errno.EWOULDBLOCK)
 
-    if PY3 and not isinstance(socket, NpipeSocket):
+    if not isinstance(socket, NpipeSocket):  # type: ignore[unreachable]
         if not hasattr(select, "poll"):
             # Limited to 1024
             select.select([socket], [], [])
@@ -51,31 +56,34 @@ def read(socket, n=4096):
             poll.poll()
 
     try:
-        if hasattr(socket, 'recv'):
+        if hasattr(socket, "recv"):
             return socket.recv(n)
-        if PY3 and isinstance(socket, getattr(pysocket, 'SocketIO')):
-            return socket.read(n)
+        if isinstance(socket, pysocket.SocketIO):  # type: ignore
+            return socket.read(n)  # type: ignore[unreachable]
         return os.read(socket.fileno(), n)
     except EnvironmentError as e:
         if e.errno not in recoverable_errors:
             raise
+        return None  # TODO ???
     except Exception as e:
-        is_pipe_ended = (isinstance(socket, NpipeSocket) and
-                         len(e.args) > 0 and
-                         e.args[0] == NPIPE_ENDED)
+        is_pipe_ended = (
+            isinstance(socket, NpipeSocket)  # type: ignore[unreachable]
+            and len(e.args) > 0
+            and e.args[0] == NPIPE_ENDED
+        )
         if is_pipe_ended:
             # npipes do not support duplex sockets, so we interpret
             # a PIPE_ENDED error as a close operation (0-length read).
-            return ''
+            return b""
         raise
 
 
-def read_exactly(socket, n):
+def read_exactly(socket: SocketLike, n: int) -> bytes:
     """
     Reads exactly n bytes from socket
     Raises SocketError if there is not enough data
     """
-    data = binary_type()
+    data = b""
     while len(data) < n:
         next_data = read(socket, n - len(data))
         if not next_data:
@@ -84,7 +92,7 @@ def read_exactly(socket, n):
     return data
 
 
-def next_frame_header(socket):
+def next_frame_header(socket: SocketLike) -> tuple[int, int]:
     """
     Returns the stream and size of the next frame of data waiting to be read
     from socket, according to the protocol defined here:
@@ -96,11 +104,11 @@ def next_frame_header(socket):
     except SocketError:
         return (-1, -1)
 
-    stream, actual = struct.unpack('>BxxxL', data)
+    stream, actual = struct.unpack(">BxxxL", data)
     return (stream, actual)
 
 
-def frames_iter(socket, tty):
+def frames_iter(socket: SocketLike, tty: bool) -> t.Generator[tuple[int, bytes]]:
     """
     Return a generator of frames read from socket. A frame is a tuple where
     the first item is the stream number and the second item is a chunk of data.
@@ -110,17 +118,16 @@ def frames_iter(socket, tty):
     """
     if tty:
         return ((STDOUT, frame) for frame in frames_iter_tty(socket))
-    else:
-        return frames_iter_no_tty(socket)
+    return frames_iter_no_tty(socket)
 
 
-def frames_iter_no_tty(socket):
+def frames_iter_no_tty(socket: SocketLike) -> t.Generator[tuple[int, bytes]]:
     """
     Returns a generator of data read from the socket when the tty setting is
     not enabled.
     """
     while True:
-        (stream, n) = next_frame_header(socket)
+        stream, n = next_frame_header(socket)
         if n < 0:
             break
         while n > 0:
@@ -135,20 +142,56 @@ def frames_iter_no_tty(socket):
             yield (stream, result)
 
 
-def frames_iter_tty(socket):
+def frames_iter_tty(socket: SocketLike) -> t.Generator[bytes]:
     """
     Return a generator of data read from the socket when the tty setting is
     enabled.
     """
     while True:
         result = read(socket)
-        if len(result) == 0:
+        if not result:
             # We have reached EOF
             return
         yield result
 
 
-def consume_socket_output(frames, demux=False):
+@t.overload
+def consume_socket_output(
+    frames: Sequence[bytes] | t.Generator[bytes], demux: t.Literal[False] = False
+) -> bytes: ...
+
+
+@t.overload
+def consume_socket_output(
+    frames: (
+        Sequence[tuple[bytes | None, bytes | None]]
+        | t.Generator[tuple[bytes | None, bytes | None]]
+    ),
+    demux: t.Literal[True],
+) -> tuple[bytes, bytes]: ...
+
+
+@t.overload
+def consume_socket_output(
+    frames: (
+        Sequence[bytes]
+        | Sequence[tuple[bytes | None, bytes | None]]
+        | t.Generator[bytes]
+        | t.Generator[tuple[bytes | None, bytes | None]]
+    ),
+    demux: bool = False,
+) -> bytes | tuple[bytes, bytes]: ...
+
+
+def consume_socket_output(
+    frames: (
+        Sequence[bytes]
+        | Sequence[tuple[bytes | None, bytes | None]]
+        | t.Generator[bytes]
+        | t.Generator[tuple[bytes | None, bytes | None]]
+    ),
+    demux: bool = False,
+) -> bytes | tuple[bytes, bytes]:
     """
     Iterate through frames read from the socket and return the result.
 
@@ -163,16 +206,17 @@ def consume_socket_output(frames, demux=False):
     if demux is False:
         # If the streams are multiplexed, the generator returns strings, that
         # we just need to concatenate.
-        return binary_type().join(frames)
+        return b"".join(frames)  # type: ignore
 
     # If the streams are demultiplexed, the generator yields tuples
     # (stdout, stderr)
-    out = [None, None]
-    for frame in frames:
+    out: list[bytes | None] = [None, None]
+    frame: tuple[bytes | None, bytes | None]
+    for frame in frames:  # type: ignore
         # It is guaranteed that for each frame, one and only one stream
         # is not None.
         if frame == (None, None):
-            raise AssertionError('frame must be (None, None), but got %s' % (frame, ))
+            raise AssertionError(f"frame must be (None, None), but got {frame}")
         if frame[0] is not None:
             if out[0] is None:
                 out[0] = frame[0]
@@ -182,18 +226,17 @@ def consume_socket_output(frames, demux=False):
             if out[1] is None:
                 out[1] = frame[1]
             else:
-                out[1] += frame[1]
-    return tuple(out)
+                out[1] += frame[1]  # type: ignore[operator]
+    return tuple(out)  # type: ignore
 
 
-def demux_adaptor(stream_id, data):
+def demux_adaptor(stream_id: int, data: bytes) -> tuple[bytes | None, bytes | None]:
     """
     Utility to demultiplex stdout and stderr when reading frames from the
     socket.
     """
     if stream_id == STDOUT:
         return (data, None)
-    elif stream_id == STDERR:
+    if stream_id == STDERR:
         return (None, data)
-    else:
-        raise ValueError('{0} is not a valid stream'.format(stream_id))
+    raise ValueError(f"{stream_id} is not a valid stream")

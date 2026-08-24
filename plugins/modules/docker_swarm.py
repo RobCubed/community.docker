@@ -4,8 +4,7 @@
 # GNU General Public License v3.0+ (see LICENSES/GPL-3.0-or-later.txt or https://www.gnu.org/licenses/gpl-3.0.txt)
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from __future__ import absolute_import, division, print_function
-__metaclass__ = type
+from __future__ import annotations
 
 DOCUMENTATION = r"""
 module: docker_swarm
@@ -14,10 +13,10 @@ description:
   - Create a new Swarm cluster.
   - Add/Remove nodes or managers to an existing cluster.
 extends_documentation_fragment:
-  - community.docker.docker
-  - community.docker.docker.docker_py_1_documentation
-  - community.docker.attributes
-  - community.docker.attributes.actiongroup_docker
+  - community.docker._docker
+  - community.docker._docker.docker_py_2_documentation
+  - community.docker._attributes
+  - community.docker._attributes.actiongroup_docker
 
 attributes:
   check_mode:
@@ -198,7 +197,7 @@ options:
     version_added: 3.1.0
 
 requirements:
-  - "L(Docker SDK for Python,https://docker-py.readthedocs.io/en/stable/) >= 1.10.0"
+  - "L(Docker SDK for Python,https://docker-py.readthedocs.io/en/stable/) >= 2.0.0"
   - Docker API >= 1.25
 author:
   - Thierry Bouvet (@tbouvet)
@@ -206,6 +205,7 @@ author:
 """
 
 EXAMPLES = r"""
+---
 - name: Init a new swarm with default parameters
   community.docker.docker_swarm:
     state: present
@@ -291,61 +291,62 @@ actions:
 
 import json
 import traceback
+import typing as t
 
 try:
-    from docker.errors import DockerException, APIError
+    from docker.errors import APIError, DockerException
 except ImportError:
     # missing Docker SDK for Python handled in ansible.module_utils.docker.common
     pass
 
-from ansible_collections.community.docker.plugins.module_utils.common import (
-    DockerBaseClass,
+from ansible_collections.community.docker.plugins.module_utils._common import (
     RequestException,
 )
-from ansible_collections.community.docker.plugins.module_utils.util import (
+from ansible_collections.community.docker.plugins.module_utils._swarm import (
+    AnsibleDockerSwarmClient,
+)
+from ansible_collections.community.docker.plugins.module_utils._util import (
     DifferenceTracker,
+    DockerBaseClass,
     sanitize_labels,
 )
 
-from ansible_collections.community.docker.plugins.module_utils.swarm import AnsibleDockerSwarmClient
-
-from ansible.module_utils.common.text.converters import to_native
-
 
 class TaskParameters(DockerBaseClass):
-    def __init__(self):
-        super(TaskParameters, self).__init__()
+    def __init__(self) -> None:
+        super().__init__()
 
-        self.advertise_addr = None
-        self.listen_addr = None
-        self.remote_addrs = None
-        self.join_token = None
-        self.data_path_addr = None
-        self.data_path_port = None
+        self.advertise_addr: str | None = None
+        self.listen_addr: str | None = None
+        self.remote_addrs: list[str] | None = None
+        self.join_token: str | None = None
+        self.data_path_addr: str | None = None
+        self.data_path_port: int | None = None
+        self.spec = None
 
         # Spec
-        self.snapshot_interval = None
-        self.task_history_retention_limit = None
-        self.keep_old_snapshots = None
-        self.log_entries_for_slow_followers = None
-        self.heartbeat_tick = None
-        self.election_tick = None
-        self.dispatcher_heartbeat_period = None
-        self.node_cert_expiry = None
-        self.name = None
-        self.labels = None
+        self.snapshot_interval: int | None = None
+        self.task_history_retention_limit: int | None = None
+        self.keep_old_snapshots: int | None = None
+        self.log_entries_for_slow_followers: int | None = None
+        self.heartbeat_tick: int | None = None
+        self.election_tick: int | None = None
+        self.dispatcher_heartbeat_period: int | None = None
+        self.node_cert_expiry: int | None = None
+        self.name: str | None = None
+        self.labels: dict[str, t.Any] | None = None
         self.log_driver = None
-        self.signing_ca_cert = None
-        self.signing_ca_key = None
-        self.ca_force_rotate = None
-        self.autolock_managers = None
-        self.rotate_worker_token = None
-        self.rotate_manager_token = None
-        self.default_addr_pool = None
-        self.subnet_size = None
+        self.signing_ca_cert: str | None = None
+        self.signing_ca_key: str | None = None
+        self.ca_force_rotate: int | None = None
+        self.autolock_managers: bool | None = None
+        self.rotate_worker_token: bool | None = None
+        self.rotate_manager_token: bool | None = None
+        self.default_addr_pool: list[str] | None = None
+        self.subnet_size: int | None = None
 
     @staticmethod
-    def from_ansible_params(client):
+    def from_ansible_params(client: AnsibleDockerSwarmClient) -> TaskParameters:
         result = TaskParameters()
         for key, value in client.module.params.items():
             if key in result.__dict__:
@@ -354,83 +355,99 @@ class TaskParameters(DockerBaseClass):
         result.update_parameters(client)
         return result
 
-    def update_from_swarm_info(self, swarm_info):
-        spec = swarm_info['Spec']
+    def update_from_swarm_info(self, swarm_info: dict[str, t.Any]) -> None:
+        spec = swarm_info["Spec"]
 
-        ca_config = spec.get('CAConfig') or dict()
+        ca_config = spec.get("CAConfig") or {}
         if self.node_cert_expiry is None:
-            self.node_cert_expiry = ca_config.get('NodeCertExpiry')
+            self.node_cert_expiry = ca_config.get("NodeCertExpiry")
         if self.ca_force_rotate is None:
-            self.ca_force_rotate = ca_config.get('ForceRotate')
+            self.ca_force_rotate = ca_config.get("ForceRotate")
 
-        dispatcher = spec.get('Dispatcher') or dict()
+        dispatcher = spec.get("Dispatcher") or {}
         if self.dispatcher_heartbeat_period is None:
-            self.dispatcher_heartbeat_period = dispatcher.get('HeartbeatPeriod')
+            self.dispatcher_heartbeat_period = dispatcher.get("HeartbeatPeriod")
 
-        raft = spec.get('Raft') or dict()
+        raft = spec.get("Raft") or {}
         if self.snapshot_interval is None:
-            self.snapshot_interval = raft.get('SnapshotInterval')
+            self.snapshot_interval = raft.get("SnapshotInterval")
         if self.keep_old_snapshots is None:
-            self.keep_old_snapshots = raft.get('KeepOldSnapshots')
+            self.keep_old_snapshots = raft.get("KeepOldSnapshots")
         if self.heartbeat_tick is None:
-            self.heartbeat_tick = raft.get('HeartbeatTick')
+            self.heartbeat_tick = raft.get("HeartbeatTick")
         if self.log_entries_for_slow_followers is None:
-            self.log_entries_for_slow_followers = raft.get('LogEntriesForSlowFollowers')
+            self.log_entries_for_slow_followers = raft.get("LogEntriesForSlowFollowers")
         if self.election_tick is None:
-            self.election_tick = raft.get('ElectionTick')
+            self.election_tick = raft.get("ElectionTick")
 
-        orchestration = spec.get('Orchestration') or dict()
+        orchestration = spec.get("Orchestration") or {}
         if self.task_history_retention_limit is None:
-            self.task_history_retention_limit = orchestration.get('TaskHistoryRetentionLimit')
+            self.task_history_retention_limit = orchestration.get(
+                "TaskHistoryRetentionLimit"
+            )
 
-        encryption_config = spec.get('EncryptionConfig') or dict()
+        encryption_config = spec.get("EncryptionConfig") or {}
         if self.autolock_managers is None:
-            self.autolock_managers = encryption_config.get('AutoLockManagers')
+            self.autolock_managers = encryption_config.get("AutoLockManagers")
 
         if self.name is None:
-            self.name = spec['Name']
+            self.name = spec["Name"]
 
         if self.labels is None:
-            self.labels = spec.get('Labels') or {}
+            self.labels = spec.get("Labels") or {}
 
-        if 'LogDriver' in spec['TaskDefaults']:
-            self.log_driver = spec['TaskDefaults']['LogDriver']
+        if "LogDriver" in spec["TaskDefaults"]:
+            self.log_driver = spec["TaskDefaults"]["LogDriver"]
 
-    def update_parameters(self, client):
-        assign = dict(
-            snapshot_interval='snapshot_interval',
-            task_history_retention_limit='task_history_retention_limit',
-            keep_old_snapshots='keep_old_snapshots',
-            log_entries_for_slow_followers='log_entries_for_slow_followers',
-            heartbeat_tick='heartbeat_tick',
-            election_tick='election_tick',
-            dispatcher_heartbeat_period='dispatcher_heartbeat_period',
-            node_cert_expiry='node_cert_expiry',
-            name='name',
-            labels='labels',
-            signing_ca_cert='signing_ca_cert',
-            signing_ca_key='signing_ca_key',
-            ca_force_rotate='ca_force_rotate',
-            autolock_managers='autolock_managers',
-            log_driver='log_driver',
-        )
-        params = dict()
+    def update_parameters(self, client: AnsibleDockerSwarmClient) -> None:
+        assign = {
+            "snapshot_interval": "snapshot_interval",
+            "task_history_retention_limit": "task_history_retention_limit",
+            "keep_old_snapshots": "keep_old_snapshots",
+            "log_entries_for_slow_followers": "log_entries_for_slow_followers",
+            "heartbeat_tick": "heartbeat_tick",
+            "election_tick": "election_tick",
+            "dispatcher_heartbeat_period": "dispatcher_heartbeat_period",
+            "node_cert_expiry": "node_cert_expiry",
+            "name": "name",
+            "labels": "labels",
+            "signing_ca_cert": "signing_ca_cert",
+            "signing_ca_key": "signing_ca_key",
+            "ca_force_rotate": "ca_force_rotate",
+            "autolock_managers": "autolock_managers",
+            "log_driver": "log_driver",
+        }
+        params = {}
         for dest, source in assign.items():
-            if not client.option_minimal_versions[source]['supported']:
+            if not client.option_minimal_versions[source]["supported"]:
                 continue
             value = getattr(self, source)
             if value is not None:
                 params[dest] = value
         self.spec = client.create_swarm_spec(**params)
 
-    def compare_to_active(self, other, client, differences):
+    def compare_to_active(
+        self,
+        other: TaskParameters,
+        client: AnsibleDockerSwarmClient,
+        differences: DifferenceTracker,
+    ) -> DifferenceTracker:
         for k in self.__dict__:
-            if k in ('advertise_addr', 'listen_addr', 'remote_addrs', 'join_token',
-                     'rotate_worker_token', 'rotate_manager_token', 'spec',
-                     'default_addr_pool', 'subnet_size', 'data_path_addr',
-                     'data_path_port'):
+            if k in (
+                "advertise_addr",
+                "listen_addr",
+                "remote_addrs",
+                "join_token",
+                "rotate_worker_token",
+                "rotate_manager_token",
+                "spec",
+                "default_addr_pool",
+                "subnet_size",
+                "data_path_addr",
+                "data_path_port",
+            ):
                 continue
-            if not client.option_minimal_versions[k]['supported']:
+            if not client.option_minimal_versions[k]["supported"]:
                 continue
             value = getattr(self, k)
             if value is None:
@@ -439,33 +456,35 @@ class TaskParameters(DockerBaseClass):
             if value != other_value:
                 differences.add(k, parameter=value, active=other_value)
         if self.rotate_worker_token:
-            differences.add('rotate_worker_token', parameter=True, active=False)
+            differences.add("rotate_worker_token", parameter=True, active=False)
         if self.rotate_manager_token:
-            differences.add('rotate_manager_token', parameter=True, active=False)
+            differences.add("rotate_manager_token", parameter=True, active=False)
         return differences
 
 
 class SwarmManager(DockerBaseClass):
-
-    def __init__(self, client, results):
-
-        super(SwarmManager, self).__init__()
+    def __init__(
+        self, client: AnsibleDockerSwarmClient, results: dict[str, t.Any]
+    ) -> None:
+        super().__init__()
 
         self.client = client
         self.results = results
         self.check_mode = self.client.check_mode
-        self.swarm_info = {}
+        self.swarm_info: dict[str, t.Any] = {}
 
-        self.state = client.module.params['state']
-        self.force = client.module.params['force']
-        self.node_id = client.module.params['node_id']
+        self.state: t.Literal["present", "join", "absent", "remove"] = (
+            client.module.params["state"]
+        )
+        self.force: bool = client.module.params["force"]
+        self.node_id: str | None = client.module.params["node_id"]
 
         self.differences = DifferenceTracker()
         self.parameters = TaskParameters.from_ansible_params(client)
 
         self.created = False
 
-    def __call__(self):
+    def __call__(self) -> None:
         choice_map = {
             "present": self.init_swarm,
             "join": self.join,
@@ -473,29 +492,29 @@ class SwarmManager(DockerBaseClass):
             "remove": self.remove,
         }
 
-        choice_map.get(self.state)()
+        choice_map[self.state]()
 
         if self.client.module._diff or self.parameters.debug:
-            diff = dict()
-            diff['before'], diff['after'] = self.differences.get_before_after()
-            self.results['diff'] = diff
+            diff = {}
+            diff["before"], diff["after"] = self.differences.get_before_after()
+            self.results["diff"] = diff
 
-    def inspect_swarm(self):
+    def inspect_swarm(self) -> None:
         try:
             data = self.client.inspect_swarm()
             json_str = json.dumps(data, ensure_ascii=False)
             self.swarm_info = json.loads(json_str)
 
-            self.results['changed'] = False
-            self.results['swarm_facts'] = self.swarm_info
+            self.results["changed"] = False
+            self.results["swarm_facts"] = self.swarm_info
 
             unlock_key = self.get_unlock_key()
             self.swarm_info.update(unlock_key)
         except APIError:
-            return
+            pass
 
-    def get_unlock_key(self):
-        default = {'UnlockKey': None}
+    def get_unlock_key(self) -> dict[str, t.Any]:
+        default = {"UnlockKey": None}
         if not self.has_swarm_lock_changed():
             return default
         try:
@@ -503,216 +522,234 @@ class SwarmManager(DockerBaseClass):
         except APIError:
             return default
 
-    def has_swarm_lock_changed(self):
-        return self.parameters.autolock_managers and (
-            self.created or self.differences.has_difference_for('autolock_managers')
+    def has_swarm_lock_changed(self) -> bool:
+        return bool(self.parameters.autolock_managers) and (
+            self.created or self.differences.has_difference_for("autolock_managers")
         )
 
-    def init_swarm(self):
+    def init_swarm(self) -> None:
         if not self.force and self.client.check_if_swarm_manager():
             self.__update_swarm()
             return
 
         if not self.check_mode:
-            init_arguments = {
-                'advertise_addr': self.parameters.advertise_addr,
-                'listen_addr': self.parameters.listen_addr,
-                'force_new_cluster': self.force,
-                'swarm_spec': self.parameters.spec,
+            init_arguments: dict[str, t.Any] = {
+                "advertise_addr": self.parameters.advertise_addr,
+                "listen_addr": self.parameters.listen_addr,
+                "force_new_cluster": self.force,
+                "swarm_spec": self.parameters.spec,
             }
             if self.parameters.default_addr_pool is not None:
-                init_arguments['default_addr_pool'] = self.parameters.default_addr_pool
+                init_arguments["default_addr_pool"] = self.parameters.default_addr_pool
             if self.parameters.subnet_size is not None:
-                init_arguments['subnet_size'] = self.parameters.subnet_size
+                init_arguments["subnet_size"] = self.parameters.subnet_size
             if self.parameters.data_path_addr is not None:
-                init_arguments['data_path_addr'] = self.parameters.data_path_addr
+                init_arguments["data_path_addr"] = self.parameters.data_path_addr
             if self.parameters.data_path_port is not None:
-                init_arguments['data_path_port'] = self.parameters.data_path_port
+                init_arguments["data_path_port"] = self.parameters.data_path_port
             try:
                 self.client.init_swarm(**init_arguments)
             except APIError as exc:
-                self.client.fail("Can not create a new Swarm Cluster: %s" % to_native(exc))
+                self.client.fail(f"Can not create a new Swarm Cluster: {exc}")
 
-        if not self.client.check_if_swarm_manager():
-            if not self.check_mode:
-                self.client.fail("Swarm not created or other error!")
+        if not self.client.check_if_swarm_manager() and not self.check_mode:
+            self.client.fail("Swarm not created or other error!")
 
         self.created = True
         self.inspect_swarm()
-        self.results['actions'].append("New Swarm cluster created: %s" % (self.swarm_info.get('ID')))
-        self.differences.add('state', parameter='present', active='absent')
-        self.results['changed'] = True
-        self.results['swarm_facts'] = {
-            'JoinTokens': self.swarm_info.get('JoinTokens'),
-            'UnlockKey': self.swarm_info.get('UnlockKey')
+        self.results["actions"].append(
+            f"New Swarm cluster created: {self.swarm_info.get('ID')}"
+        )
+        self.differences.add("state", parameter="present", active="absent")
+        self.results["changed"] = True
+        self.results["swarm_facts"] = {
+            "JoinTokens": self.swarm_info.get("JoinTokens"),
+            "UnlockKey": self.swarm_info.get("UnlockKey"),
         }
 
-    def __update_swarm(self):
+    def __update_swarm(self) -> None:
         try:
             self.inspect_swarm()
-            version = self.swarm_info['Version']['Index']
+            version = self.swarm_info["Version"]["Index"]
             self.parameters.update_from_swarm_info(self.swarm_info)
             old_parameters = TaskParameters()
             old_parameters.update_from_swarm_info(self.swarm_info)
-            self.parameters.compare_to_active(old_parameters, self.client, self.differences)
+            self.parameters.compare_to_active(
+                old_parameters, self.client, self.differences
+            )
             if self.differences.empty:
-                self.results['actions'].append("No modification")
-                self.results['changed'] = False
+                self.results["actions"].append("No modification")
+                self.results["changed"] = False
                 return
             update_parameters = TaskParameters.from_ansible_params(self.client)
             update_parameters.update_parameters(self.client)
             if not self.check_mode:
                 self.client.update_swarm(
-                    version=version, swarm_spec=update_parameters.spec,
+                    version=version,
+                    swarm_spec=update_parameters.spec,
                     rotate_worker_token=self.parameters.rotate_worker_token,
-                    rotate_manager_token=self.parameters.rotate_manager_token)
+                    rotate_manager_token=self.parameters.rotate_manager_token,
+                )
         except APIError as exc:
-            self.client.fail("Can not update a Swarm Cluster: %s" % to_native(exc))
-            return
+            self.client.fail(f"Can not update a Swarm Cluster: {exc}")
 
         self.inspect_swarm()
-        self.results['actions'].append("Swarm cluster updated")
-        self.results['changed'] = True
+        self.results["actions"].append("Swarm cluster updated")
+        self.results["changed"] = True
 
-    def join(self):
+    def join(self) -> None:
         if self.client.check_if_swarm_node():
-            self.results['actions'].append("This node is already part of a swarm.")
+            self.results["actions"].append("This node is already part of a swarm.")
             return
         if not self.check_mode:
             join_arguments = {
-                'remote_addrs': self.parameters.remote_addrs,
-                'join_token': self.parameters.join_token,
-                'listen_addr': self.parameters.listen_addr,
-                'advertise_addr': self.parameters.advertise_addr,
+                "remote_addrs": self.parameters.remote_addrs,
+                "join_token": self.parameters.join_token,
+                "listen_addr": self.parameters.listen_addr,
+                "advertise_addr": self.parameters.advertise_addr,
             }
             if self.parameters.data_path_addr is not None:
-                join_arguments['data_path_addr'] = self.parameters.data_path_addr
+                join_arguments["data_path_addr"] = self.parameters.data_path_addr
             try:
                 self.client.join_swarm(**join_arguments)
             except APIError as exc:
-                self.client.fail("Can not join the Swarm Cluster: %s" % to_native(exc))
-        self.results['actions'].append("New node is added to swarm cluster")
-        self.differences.add('joined', parameter=True, active=False)
-        self.results['changed'] = True
+                self.client.fail(f"Can not join the Swarm Cluster: {exc}")
+        self.results["actions"].append("New node is added to swarm cluster")
+        self.differences.add("joined", parameter=True, active=False)
+        self.results["changed"] = True
 
-    def leave(self):
+    def leave(self) -> None:
         if not self.client.check_if_swarm_node():
-            self.results['actions'].append("This node is not part of a swarm.")
+            self.results["actions"].append("This node is not part of a swarm.")
             return
         if not self.check_mode:
             try:
                 self.client.leave_swarm(force=self.force)
             except APIError as exc:
-                self.client.fail("This node can not leave the Swarm Cluster: %s" % to_native(exc))
-        self.results['actions'].append("Node has left the swarm cluster")
-        self.differences.add('joined', parameter='absent', active='present')
-        self.results['changed'] = True
+                self.client.fail(f"This node can not leave the Swarm Cluster: {exc}")
+        self.results["actions"].append("Node has left the swarm cluster")
+        self.differences.add("joined", parameter="absent", active="present")
+        self.results["changed"] = True
 
-    def remove(self):
+    def remove(self) -> None:
         if not self.client.check_if_swarm_manager():
             self.client.fail("This node is not a manager.")
 
         try:
-            status_down = self.client.check_if_swarm_node_is_down(node_id=self.node_id, repeat_check=5)
+            status_down = self.client.check_if_swarm_node_is_down(
+                node_id=self.node_id, repeat_check=5
+            )
         except APIError:
             return
 
         if not status_down:
-            self.client.fail("Can not remove the node. The status node is ready and not down.")
+            self.client.fail(
+                "Can not remove the node. The status node is ready and not down."
+            )
 
         if not self.check_mode:
             try:
                 self.client.remove_node(node_id=self.node_id, force=self.force)
             except APIError as exc:
-                self.client.fail("Can not remove the node from the Swarm Cluster: %s" % to_native(exc))
-        self.results['actions'].append("Node is removed from swarm cluster.")
-        self.differences.add('joined', parameter=False, active=True)
-        self.results['changed'] = True
+                self.client.fail(
+                    f"Can not remove the node from the Swarm Cluster: {exc}"
+                )
+        self.results["actions"].append("Node is removed from swarm cluster.")
+        self.differences.add("joined", parameter=False, active=True)
+        self.results["changed"] = True
 
 
-def _detect_remove_operation(client):
-    return client.module.params['state'] == 'remove'
+def _detect_remove_operation(client: AnsibleDockerSwarmClient) -> bool:
+    return client.module.params["state"] == "remove"
 
 
-def main():
-    argument_spec = dict(
-        advertise_addr=dict(type='str'),
-        data_path_addr=dict(type='str'),
-        data_path_port=dict(type='int'),
-        state=dict(type='str', default='present', choices=['present', 'join', 'absent', 'remove']),
-        force=dict(type='bool', default=False),
-        listen_addr=dict(type='str', default='0.0.0.0:2377'),
-        remote_addrs=dict(type='list', elements='str'),
-        join_token=dict(type='str', no_log=True),
-        snapshot_interval=dict(type='int'),
-        task_history_retention_limit=dict(type='int'),
-        keep_old_snapshots=dict(type='int'),
-        log_entries_for_slow_followers=dict(type='int'),
-        heartbeat_tick=dict(type='int'),
-        election_tick=dict(type='int'),
-        dispatcher_heartbeat_period=dict(type='int'),
-        node_cert_expiry=dict(type='int'),
-        name=dict(type='str'),
-        labels=dict(type='dict'),
-        signing_ca_cert=dict(type='str'),
-        signing_ca_key=dict(type='str', no_log=True),
-        ca_force_rotate=dict(type='int'),
-        autolock_managers=dict(type='bool'),
-        node_id=dict(type='str'),
-        rotate_worker_token=dict(type='bool', default=False),
-        rotate_manager_token=dict(type='bool', default=False),
-        default_addr_pool=dict(type='list', elements='str'),
-        subnet_size=dict(type='int'),
-    )
+def main() -> None:
+    # TODO: missing option log_driver?
+    argument_spec = {
+        "advertise_addr": {"type": "str"},
+        "data_path_addr": {"type": "str"},
+        "data_path_port": {"type": "int"},
+        "state": {
+            "type": "str",
+            "default": "present",
+            "choices": ["present", "join", "absent", "remove"],
+        },
+        "force": {"type": "bool", "default": False},
+        "listen_addr": {"type": "str", "default": "0.0.0.0:2377"},
+        "remote_addrs": {"type": "list", "elements": "str"},
+        "join_token": {"type": "str", "no_log": True},
+        "snapshot_interval": {"type": "int"},
+        "task_history_retention_limit": {"type": "int"},
+        "keep_old_snapshots": {"type": "int"},
+        "log_entries_for_slow_followers": {"type": "int"},
+        "heartbeat_tick": {"type": "int"},
+        "election_tick": {"type": "int"},
+        "dispatcher_heartbeat_period": {"type": "int"},
+        "node_cert_expiry": {"type": "int"},
+        "name": {"type": "str"},
+        "labels": {"type": "dict"},
+        "signing_ca_cert": {"type": "str"},
+        "signing_ca_key": {"type": "str", "no_log": True},
+        "ca_force_rotate": {"type": "int"},
+        "autolock_managers": {"type": "bool"},
+        "node_id": {"type": "str"},
+        "rotate_worker_token": {"type": "bool", "default": False},
+        "rotate_manager_token": {"type": "bool", "default": False},
+        "default_addr_pool": {"type": "list", "elements": "str"},
+        "subnet_size": {"type": "int"},
+    }
 
     required_if = [
-        ('state', 'join', ['remote_addrs', 'join_token']),
-        ('state', 'remove', ['node_id'])
+        ("state", "join", ["remote_addrs", "join_token"]),
+        ("state", "remove", ["node_id"]),
     ]
 
-    option_minimal_versions = dict(
-        labels=dict(docker_py_version='2.6.0', docker_api_version='1.32'),
-        signing_ca_cert=dict(docker_py_version='2.6.0', docker_api_version='1.30'),
-        signing_ca_key=dict(docker_py_version='2.6.0', docker_api_version='1.30'),
-        ca_force_rotate=dict(docker_py_version='2.6.0', docker_api_version='1.30'),
-        autolock_managers=dict(docker_py_version='2.6.0'),
-        log_driver=dict(docker_py_version='2.6.0'),
-        remove_operation=dict(
-            docker_py_version='2.4.0',
-            detect_usage=_detect_remove_operation,
-            usage_msg='remove swarm nodes'
-        ),
-        default_addr_pool=dict(docker_py_version='4.0.0', docker_api_version='1.39'),
-        subnet_size=dict(docker_py_version='4.0.0', docker_api_version='1.39'),
-        data_path_addr=dict(docker_py_version='4.0.0', docker_api_version='1.30'),
-        data_path_port=dict(docker_py_version='6.0.0', docker_api_version='1.40'),
-    )
+    option_minimal_versions = {
+        "labels": {"docker_py_version": "2.6.0", "docker_api_version": "1.32"},
+        "signing_ca_cert": {"docker_py_version": "2.6.0", "docker_api_version": "1.30"},
+        "signing_ca_key": {"docker_py_version": "2.6.0", "docker_api_version": "1.30"},
+        "ca_force_rotate": {"docker_py_version": "2.6.0", "docker_api_version": "1.30"},
+        "autolock_managers": {"docker_py_version": "2.6.0"},
+        "log_driver": {"docker_py_version": "2.6.0"},
+        "remove_operation": {
+            "docker_py_version": "2.4.0",
+            "detect_usage": _detect_remove_operation,
+            "usage_msg": "remove swarm nodes",
+        },
+        "default_addr_pool": {
+            "docker_py_version": "4.0.0",
+            "docker_api_version": "1.39",
+        },
+        "subnet_size": {"docker_py_version": "4.0.0", "docker_api_version": "1.39"},
+        "data_path_addr": {"docker_py_version": "4.0.0", "docker_api_version": "1.30"},
+        "data_path_port": {"docker_py_version": "6.0.0", "docker_api_version": "1.40"},
+    }
 
     client = AnsibleDockerSwarmClient(
         argument_spec=argument_spec,
         supports_check_mode=True,
         required_if=required_if,
-        min_docker_version='1.10.0',
+        min_docker_version="2.0.0",
         option_minimal_versions=option_minimal_versions,
     )
-    sanitize_labels(client.module.params['labels'], 'labels', client)
+    sanitize_labels(client.module.params["labels"], "labels", client)
 
     try:
-        results = dict(
-            changed=False,
-            result='',
-            actions=[]
-        )
+        results = {"changed": False, "result": "", "actions": []}
 
         SwarmManager(client, results)()
         client.module.exit_json(**results)
     except DockerException as e:
-        client.fail('An unexpected docker error occurred: {0}'.format(to_native(e)), exception=traceback.format_exc())
+        client.fail(
+            f"An unexpected Docker error occurred: {e}",
+            exception=traceback.format_exc(),
+        )
     except RequestException as e:
         client.fail(
-            'An unexpected requests error occurred when Docker SDK for Python tried to talk to the docker daemon: {0}'.format(to_native(e)),
-            exception=traceback.format_exc())
+            f"An unexpected requests error occurred when Docker SDK for Python tried to talk to the docker daemon: {e}",
+            exception=traceback.format_exc(),
+        )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

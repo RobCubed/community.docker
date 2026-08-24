@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # This code is part of the Ansible collection community.docker, but is an independent component.
 # This particular file, and this file only, is based on the Docker SDK for Python (https://github.com/docker/docker-py/)
 #
@@ -7,8 +6,8 @@
 # It is licensed under the Apache 2.0 license (see LICENSES/Apache-2.0.txt in this collection)
 # SPDX-License-Identifier: Apache-2.0
 
-from __future__ import (absolute_import, division, print_function)
-__metaclass__ = type
+# Note that this module util is **PRIVATE** to the collection. It can have breaking changes at any time.
+# Do not use this from other collections or standalone plugins/modules!
 
 """Filename matching with shell patterns.
 
@@ -22,20 +21,22 @@ The function translate(PATTERN) returns a regular expression
 corresponding to PATTERN.  (It does not compile it.)
 """
 
+from __future__ import annotations
+
 import re
 
 __all__ = ["fnmatch", "fnmatchcase", "translate"]
 
-_cache = {}
+_cache: dict[str, re.Pattern] = {}
 _MAXCACHE = 100
 
 
-def _purge():
+def _purge() -> None:
     """Clear the pattern cache"""
     _cache.clear()
 
 
-def fnmatch(name, pat):
+def fnmatch(name: str, pat: str) -> bool:
     """Test whether FILENAME matches PATTERN.
 
     Patterns are Unix shell style:
@@ -56,7 +57,7 @@ def fnmatch(name, pat):
     return fnmatchcase(name, pat)
 
 
-def fnmatchcase(name, pat):
+def fnmatchcase(name: str, pat: str) -> bool:
     """Test whether FILENAME matches PATTERN, including case.
     This is a version of fnmatch() which does not case-normalize
     its arguments.
@@ -72,56 +73,56 @@ def fnmatchcase(name, pat):
     return re_pat.match(name) is not None
 
 
-def translate(pat):
+def translate(pat: str) -> str:
     """Translate a shell PATTERN to a regular expression.
 
     There is no way to quote meta-characters.
     """
     i, n = 0, len(pat)
-    res = '^'
+    res = "^"
     while i < n:
         c = pat[i]
         i = i + 1
-        if c == '*':
-            if i < n and pat[i] == '*':
+        if c == "*":
+            if i < n and pat[i] == "*":
                 # is some flavor of "**"
                 i = i + 1
                 # Treat **/ as ** so eat the "/"
-                if i < n and pat[i] == '/':
+                if i < n and pat[i] == "/":
                     i = i + 1
                 if i >= n:
                     # is "**EOF" - to align with .gitignore just accept all
-                    res = res + '.*'
+                    res = res + ".*"
                 else:
                     # is "**"
                     # Note that this allows for any # of /'s (even 0) because
                     # the .* will eat everything, even /'s
-                    res = res + '(.*/)?'
+                    res = res + "(.*/)?"
             else:
                 # is "*" so map it to anything but "/"
-                res = res + '[^/]*'
-        elif c == '?':
+                res = res + "[^/]*"
+        elif c == "?":
             # "?" is any char except "/"
-            res = res + '[^/]'
-        elif c == '[':
+            res = res + "[^/]"
+        elif c == "[":
             j = i
-            if j < n and pat[j] == '!':
+            if j < n and pat[j] == "!":
                 j = j + 1
-            if j < n and pat[j] == ']':
+            if j < n and pat[j] == "]":
                 j = j + 1
-            while j < n and pat[j] != ']':
+            while j < n and pat[j] != "]":
                 j = j + 1
             if j >= n:
-                res = res + '\\['
+                res = res + "\\["
             else:
-                stuff = pat[i:j].replace('\\', '\\\\')
+                stuff = pat[i:j].replace("\\", "\\\\")
                 i = j + 1
-                if stuff[0] == '!':
-                    stuff = '^' + stuff[1:]
-                elif stuff[0] == '^':
-                    stuff = '\\' + stuff
-                res = '%s[%s]' % (res, stuff)
+                if stuff[0] == "!":
+                    stuff = "^" + stuff[1:]
+                elif stuff[0] == "^":
+                    stuff = "\\" + stuff
+                res = f"{res}[{stuff}]"
         else:
             res = res + re.escape(c)
 
-    return res + '$'
+    return res + "$"

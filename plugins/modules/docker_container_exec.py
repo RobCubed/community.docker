@@ -4,9 +4,7 @@
 # GNU General Public License v3.0+ (see LICENSES/GPL-3.0-or-later.txt or https://www.gnu.org/licenses/gpl-3.0.txt)
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from __future__ import absolute_import, division, print_function
-__metaclass__ = type
-
+from __future__ import annotations
 
 DOCUMENTATION = r"""
 module: docker_container_exec
@@ -18,9 +16,9 @@ version_added: 1.5.0
 description:
   - Executes a command in a Docker container.
 extends_documentation_fragment:
-  - community.docker.docker.api_documentation
-  - community.docker.attributes
-  - community.docker.attributes.actiongroup_docker
+  - community.docker._docker.api_documentation
+  - community.docker._attributes
+  - community.docker._attributes.actiongroup_docker
 
 attributes:
   check_mode:
@@ -111,6 +109,7 @@ requirements:
 """
 
 EXAMPLES = r"""
+---
 - name: Run a simple command (command)
   community.docker.docker_container_exec:
     container: foo
@@ -166,121 +165,139 @@ exec_id:
 import shlex
 import traceback
 import collections
+import typing as t
 
-from ansible.module_utils.common.text.converters import to_text, to_bytes, to_native
-from ansible.module_utils.six import string_types
-
-from ansible_collections.community.docker.plugins.module_utils.common_api import (
-    AnsibleDockerClient,
-    RequestException,
-)
-
-from ansible_collections.community.docker.plugins.module_utils.selectors import selectors
-
-from ansible_collections.community.docker.plugins.module_utils.socket_handler import (
-    DockerSocketHandlerModule,
-)
+from ansible.module_utils.common.text.converters import to_bytes, to_text
 
 from ansible_collections.community.docker.plugins.module_utils._api.errors import (
     APIError,
     DockerException,
     NotFound,
 )
-from ansible_collections.community.docker.plugins.module_utils._api.utils.utils import format_environment
+from ansible_collections.community.docker.plugins.module_utils._api.utils.utils import (
+    format_environment,
+)
+from ansible_collections.community.docker.plugins.module_utils._common_api import (
+    AnsibleDockerClient,
+    RequestException,
+)
+from ansible_collections.community.docker.plugins.module_utils._socket_handler import (
+    DockerSocketHandlerModule,
+)
 
 
-def main():
-    argument_spec = dict(
-        container=dict(type='str', required=True),
-        argv=dict(type='list', elements='str'),
-        command=dict(type='str'),
-        chdir=dict(type='str'),
-        detach=dict(type='bool', default=False),
-        user=dict(type='str'),
-        stdin=dict(type='str'),
-        stdin_add_newline=dict(type='bool', default=True),
-        strip_empty_ends=dict(type='bool', default=True),
-        tty=dict(type='bool', default=False),
-        env=dict(type='dict'),
-    )
+def main() -> None:
+    argument_spec = {
+        "container": {"type": "str", "required": True},
+        "argv": {"type": "list", "elements": "str"},
+        "command": {"type": "str"},
+        "chdir": {"type": "str"},
+        "detach": {"type": "bool", "default": False},
+        "user": {"type": "str"},
+        "stdin": {"type": "str"},
+        "stdin_add_newline": {"type": "bool", "default": True},
+        "strip_empty_ends": {"type": "bool", "default": True},
+        "tty": {"type": "bool", "default": False},
+        "env": {"type": "dict"},
+    }
 
-    option_minimal_versions = dict(
-        chdir=dict(docker_api_version='1.35'),
-    )
+    option_minimal_versions = {
+        "chdir": {"docker_api_version": "1.35"},
+    }
 
     client = AnsibleDockerClient(
         argument_spec=argument_spec,
         option_minimal_versions=option_minimal_versions,
-        mutually_exclusive=[('argv', 'command')],
-        required_one_of=[('argv', 'command')],
+        mutually_exclusive=[("argv", "command")],
+        required_one_of=[("argv", "command")],
     )
 
-    container = client.module.params['container']
-    argv = client.module.params['argv']
-    command = client.module.params['command']
-    chdir = client.module.params['chdir']
-    detach = client.module.params['detach']
-    user = client.module.params['user']
-    stdin = client.module.params['stdin']
-    strip_empty_ends = client.module.params['strip_empty_ends']
-    tty = client.module.params['tty']
-    env = client.module.params['env']
+    container: str = client.module.params["container"]
+    argv: list[str] | None = client.module.params["argv"]
+    command: str | None = client.module.params["command"]
+    chdir: str | None = client.module.params["chdir"]
+    detach: bool = client.module.params["detach"]
+    user: str | None = client.module.params["user"]
+    stdin: str | None = client.module.params["stdin"]
+    strip_empty_ends: bool = client.module.params["strip_empty_ends"]
+    tty: bool = client.module.params["tty"]
+    env: dict[str, t.Any] | None = client.module.params["env"]
 
     if env is not None:
-        for name, value in list(env.items()):
-            if not isinstance(value, string_types):
+        for name, value in env.items():
+            if not isinstance(value, str):
                 client.module.fail_json(
                     msg="Non-string value found for env option. Ambiguous env options must be "
-                        "wrapped in quotes to avoid them being interpreted. Key: %s" % (name, ))
-            env[name] = to_text(value, errors='surrogate_or_strict')
+                    "wrapped in quotes to avoid them being interpreted when directly specified "
+                    "in YAML, or explicitly converted to strings when the option is templated. "
+                    f"Key: {name}"
+                )
 
     if command is not None:
         argv = shlex.split(command)
+    assert argv is not None
 
     if detach and stdin is not None:
-        client.module.fail_json(msg='If detach=true, stdin cannot be provided.')
+        client.module.fail_json(msg="If detach=true, stdin cannot be provided.")
 
-    if stdin is not None and client.module.params['stdin_add_newline']:
-        stdin += '\n'
+    if stdin is not None and client.module.params["stdin_add_newline"]:
+        stdin += "\n"
 
     try:
         data = {
-            'Container': container,
-            'User': user or '',
-            'Privileged': False,
-            'Tty': False,
-            'AttachStdin': bool(stdin),
-            'AttachStdout': True,
-            'AttachStderr': True,
-            'Cmd': argv,
-            'Env': format_environment(env) if env is not None else None,
+            "Container": container,
+            "User": user or "",
+            "Privileged": False,
+            "Tty": False,
+            "AttachStdin": bool(stdin),
+            "AttachStdout": True,
+            "AttachStderr": True,
+            "Cmd": argv,
+            "Env": format_environment(env) if env is not None else None,
         }
         if chdir is not None:
-            data['WorkingDir'] = chdir
+            data["WorkingDir"] = chdir
 
-        exec_data = client.post_json_to_json('/containers/{0}/exec', container, data=data)
-        exec_id = exec_data['Id']
+        exec_data = client.post_json_to_json(
+            "/containers/{0}/exec", container, data=data
+        )
+        exec_id: str = exec_data["Id"]
 
         data = {
-            'Tty': tty,
-            'Detach': detach,
+            "Tty": tty,
+            "Detach": detach,
         }
         if detach:
-            client.post_json_to_text('/exec/{0}/start', exec_id, data=data)
+            client.post_json_to_text("/exec/{0}/start", exec_id, data=data)
             client.module.exit_json(changed=True, exec_id=exec_id)
 
         else:
             stream = None
+            stdout: bytes | None
+            stderr: bytes | None
             if stdin and not detach:
-                exec_socket = client.post_json_to_stream_socket('/exec/{0}/start', exec_id, data=data)
+                exec_socket, response = client.post_json_to_stream_socket(
+                    "/exec/{0}/start", exec_id, data=data
+                )
                 try:
-                    with DockerSocketHandlerModule(exec_socket, client.module, selectors) as exec_socket_handler:
+                    with DockerSocketHandlerModule(
+                        exec_socket, client.module
+                    ) as exec_socket_handler:
                         if stdin:
                             exec_socket_handler.write(to_bytes(stdin))
 
                         stdout, stderr = exec_socket_handler.consume()
                 finally:
-                    exec_socket.close()
+                    response.close()
+            elif tty:
+                stdout, stderr = client.post_json_to_stream(
+                    "/exec/{0}/start",
+                    exec_id,
+                    data=data,
+                    stream=False,
+                    tty=True,
+                    demux=True,
+                )
             else:
               stdout, stderr = (b"", b"")
               stream = client.post_json_to_stream('/exec/{0}/start', exec_id, data=data, stream=True, tty=tty, demux=True)
@@ -293,34 +310,49 @@ def main():
                     if stderr_line:
                       stderr += stderr_line
                       print("%STDERR%", to_text(stderr_line))
+                """stdout, stderr = client.post_json_to_stream(
+                    "/exec/{0}/start",
+                    exec_id,
+                    data=data,
+                    stream=False,
+                    tty=False,
+                    demux=True,
+                )"""
 
-            result = client.get_json('/exec/{0}/json', exec_id)
+            result = client.get_json("/exec/{0}/json", exec_id)
 
-            stdout = to_text(stdout or b'')
-            stderr = to_text(stderr or b'')
+            stdout_t = to_text(stdout or b"")
+            stderr_t = to_text(stderr or b"")
             if strip_empty_ends:
-                stdout = stdout.rstrip('\r\n')
-                stderr = stderr.rstrip('\r\n')
+                stdout_t = stdout_t.rstrip("\r\n")
+                stderr_t = stderr_t.rstrip("\r\n")
 
             client.module.exit_json(
                 changed=True,
-                stdout=stdout,
-                stderr=stderr,
-                rc=result.get('ExitCode') or 0,
+                stdout=stdout_t,
+                stderr=stderr_t,
+                rc=result.get("ExitCode") or 0,
             )
     except NotFound:
-        client.fail('Could not find container "{0}"'.format(container))
+        client.fail(f'Could not find container "{container}"')
     except APIError as e:
         if e.response is not None and e.response.status_code == 409:
-            client.fail('The container "{0}" has been paused ({1})'.format(container, to_native(e)))
-        client.fail('An unexpected Docker error occurred: {0}'.format(to_native(e)), exception=traceback.format_exc())
+            client.fail(f'The container "{container}" has been paused ({e})')
+        client.fail(
+            f"An unexpected Docker error occurred: {e}",
+            exception=traceback.format_exc(),
+        )
     except DockerException as e:
-        client.fail('An unexpected Docker error occurred: {0}'.format(to_native(e)), exception=traceback.format_exc())
+        client.fail(
+            f"An unexpected Docker error occurred: {e}",
+            exception=traceback.format_exc(),
+        )
     except RequestException as e:
         client.fail(
-            'An unexpected requests error occurred when trying to talk to the Docker daemon: {0}'.format(to_native(e)),
-            exception=traceback.format_exc())
+            f"An unexpected requests error occurred when trying to talk to the Docker daemon: {e}",
+            exception=traceback.format_exc(),
+        )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

@@ -4,9 +4,7 @@
 # GNU General Public License v3.0+ (see LICENSES/GPL-3.0-or-later.txt or https://www.gnu.org/licenses/gpl-3.0.txt)
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from __future__ import absolute_import, division, print_function
-__metaclass__ = type
-
+from __future__ import annotations
 
 DOCUMENTATION = r"""
 module: docker_image_tag
@@ -18,9 +16,9 @@ version_added: 3.6.0
 description:
   - This module allows to tag Docker images with new names and/or tags.
 extends_documentation_fragment:
-  - community.docker.docker.api_documentation
-  - community.docker.attributes
-  - community.docker.attributes.actiongroup_docker
+  - community.docker._docker.api_documentation
+  - community.docker._attributes
+  - community.docker._attributes.actiongroup_docker
 
 attributes:
   check_mode:
@@ -76,6 +74,7 @@ seealso:
 """
 
 EXAMPLES = r"""
+---
 - name: Tag Python 3.12 image with two new names
   community.docker.docker_image_tag:
     name: python:3.12
@@ -101,59 +100,67 @@ tagged_images:
 """
 
 import traceback
+import typing as t
 
-from ansible.module_utils.common.text.converters import to_native
 from ansible.module_utils.common.text.formatters import human_to_bytes
 
-from ansible_collections.community.docker.plugins.module_utils.common_api import (
+from ansible_collections.community.docker.plugins.module_utils._api.errors import (
+    DockerException,
+)
+from ansible_collections.community.docker.plugins.module_utils._api.utils.utils import (
+    parse_repository_tag,
+)
+from ansible_collections.community.docker.plugins.module_utils._common_api import (
     AnsibleDockerClient,
     RequestException,
 )
-
-from ansible_collections.community.docker.plugins.module_utils.util import (
+from ansible_collections.community.docker.plugins.module_utils._util import (
     DockerBaseClass,
     is_image_name_id,
     is_valid_tag,
 )
 
-from ansible_collections.community.docker.plugins.module_utils._api.errors import DockerException
-from ansible_collections.community.docker.plugins.module_utils._api.utils.utils import (
-    parse_repository_tag,
-)
+if t.TYPE_CHECKING:
+    from ansible.module_utils.basic import AnsibleModule
 
 
-def convert_to_bytes(value, module, name, unlimited_value=None):
+def convert_to_bytes(
+    value: str | None,
+    module: AnsibleModule,
+    name: str,
+    unlimited_value: int | None = None,
+) -> int | None:
     if value is None:
         return value
     try:
-        if unlimited_value is not None and value in ('unlimited', str(unlimited_value)):
+        if unlimited_value is not None and value in ("unlimited", str(unlimited_value)):
             return unlimited_value
         return human_to_bytes(value)
     except ValueError as exc:
-        module.fail_json(msg='Failed to convert %s to bytes: %s' % (name, to_native(exc)))
+        module.fail_json(msg=f"Failed to convert {name} to bytes: {exc}")
 
 
-def image_info(name, tag, image):
-    result = dict(name=name, tag=tag)
+def image_info(name: str, tag: str, image: dict[str, t.Any] | None) -> dict[str, t.Any]:
+    result: dict[str, t.Any] = {"name": name, "tag": tag}
     if image:
-        result['id'] = image['Id']
+        result["id"] = image["Id"]
     else:
-        result['exists'] = False
+        result["exists"] = False
     return result
 
 
 class ImageTagger(DockerBaseClass):
-    def __init__(self, client):
-        super(ImageTagger, self).__init__()
+    def __init__(self, client: AnsibleDockerClient) -> None:
+        super().__init__()
 
         self.client = client
         parameters = self.client.module.params
         self.check_mode = self.client.check_mode
 
-        self.name = parameters['name']
-        self.tag = parameters['tag']
+        self.name = parameters["name"]
+        self.tag = parameters["tag"]
         if not is_valid_tag(self.tag, allow_empty=True):
-            self.fail('"{0}" is not a valid docker tag'.format(self.tag))
+            self.fail(f'"{self.tag}" is not a valid docker tag')
 
         # If name contains a tag, it takes precedence over tag parameter.
         if not is_image_name_id(self.name):
@@ -162,98 +169,116 @@ class ImageTagger(DockerBaseClass):
                 self.name = repo
                 self.tag = repo_tag
 
-        self.keep_existing_images = parameters['existing_images'] == 'keep'
+        self.keep_existing_images = parameters["existing_images"] == "keep"
 
         # Make sure names in repository are valid images, and add tag if needed
         self.repositories = []
-        for i, repository in enumerate(parameters['repository']):
+        for i, repository in enumerate(parameters["repository"]):
             if is_image_name_id(repository):
-                self.fail("repository[%d] must not be an image ID; got: %s" % (i + 1, repository))
+                self.fail(
+                    f"repository[{i + 1}] must not be an image ID; got: {repository}"
+                )
             repo, repo_tag = parse_repository_tag(repository)
             if not repo_tag:
-                repo_tag = parameters['tag']
+                repo_tag = parameters["tag"]
             elif not is_valid_tag(repo_tag, allow_empty=False):
-                self.fail("repository[%d] must not have a digest; got: %s" % (i + 1, repository))
+                self.fail(
+                    f"repository[{i + 1}] must not have a digest; got: {repository}"
+                )
             self.repositories.append((repo, repo_tag))
 
-    def fail(self, msg):
+    def fail(self, msg: str) -> t.NoReturn:
         self.client.fail(msg)
 
-    def tag_image(self, image, name, tag):
+    def tag_image(
+        self, image: dict[str, t.Any], name: str, tag: str
+    ) -> tuple[bool, str, dict[str, t.Any] | None]:
         tagged_image = self.client.find_image(name=name, tag=tag)
         if tagged_image:
             # Idempotency checks
-            if tagged_image['Id'] == image['Id']:
+            if tagged_image["Id"] == image["Id"]:
                 return (
                     False,
-                    "target image already exists (%s) and is as expected" % tagged_image['Id'],
+                    f"target image already exists ({tagged_image['Id']}) and is as expected",
                     tagged_image,
                 )
             if self.keep_existing_images:
                 return (
                     False,
-                    "target image already exists (%s) and is not as expected, but kept" % tagged_image['Id'],
+                    f"target image already exists ({tagged_image['Id']}) and is not as expected, but kept",
                     tagged_image,
                 )
-            msg = "target image existed (%s) and was not as expected" % tagged_image['Id']
+            msg = f"target image existed ({tagged_image['Id']}) and was not as expected"
         else:
             msg = "target image did not exist"
 
         if not self.check_mode:
             try:
                 params = {
-                    'tag': tag,
-                    'repo': name,
-                    'force': True,
+                    "tag": tag,
+                    "repo": name,
+                    "force": True,
                 }
-                res = self.client._post(self.client._url('/images/{0}/tag', image['Id']), params=params)
+                res = self.client._post(
+                    self.client._url("/images/{0}/tag", image["Id"]), params=params
+                )
                 self.client._raise_for_status(res)
                 if res.status_code != 201:
-                    raise Exception("Tag operation failed.")
-            except Exception as exc:
-                self.fail("Error: failed to tag image as %s:%s - %s" % (name, tag, to_native(exc)))
+                    raise RuntimeError("Tag operation failed.")
+            except Exception as exc:  # pylint: disable=broad-exception-caught
+                self.fail(f"Error: failed to tag image as {name}:{tag} - {exc}")
 
         return True, msg, tagged_image
 
-    def tag_images(self):
+    def tag_images(self) -> dict[str, t.Any]:
         if is_image_name_id(self.name):
             image = self.client.find_image_by_id(self.name, accept_missing_image=False)
         else:
             image = self.client.find_image(name=self.name, tag=self.tag)
             if not image:
-                self.fail("Cannot find image %s:%s" % (self.name, self.tag))
+                self.fail(f"Cannot find image {self.name}:{self.tag}")
+        assert image is not None
 
-        before = []
-        after = []
-        tagged_images = []
-        results = dict(
-            changed=False,
-            actions=[],
-            image=image,
-            tagged_images=tagged_images,
-            diff=dict(before=dict(images=before), after=dict(images=after)),
-        )
+        before: list[dict[str, t.Any]] = []
+        after: list[dict[str, t.Any]] = []
+        tagged_images: list[str] = []
+        actions: list[str] = []
+        results: dict[str, t.Any] = {
+            "changed": False,
+            "actions": actions,
+            "image": image,
+            "tagged_images": tagged_images,
+            "diff": {"before": {"images": before}, "after": {"images": after}},
+        }
         for repository, tag in self.repositories:
             tagged, msg, old_image = self.tag_image(image, repository, tag)
             before.append(image_info(repository, tag, old_image))
             after.append(image_info(repository, tag, image if tagged else old_image))
             if tagged:
-                results['changed'] = True
-                results['actions'].append('Tagged image %s as %s:%s: %s' % (image['Id'], repository, tag, msg))
-                tagged_images.append('%s:%s' % (repository, tag))
+                results["changed"] = True
+                actions.append(
+                    f"Tagged image {image['Id']} as {repository}:{tag}: {msg}"
+                )
+                tagged_images.append(f"{repository}:{tag}")
             else:
-                results['actions'].append('Not tagged image %s as %s:%s: %s' % (image['Id'], repository, tag, msg))
+                actions.append(
+                    f"Not tagged image {image['Id']} as {repository}:{tag}: {msg}"
+                )
 
         return results
 
 
-def main():
-    argument_spec = dict(
-        name=dict(type='str', required=True),
-        tag=dict(type='str', default='latest'),
-        repository=dict(type='list', elements='str', required=True),
-        existing_images=dict(type='str', choices=['keep', 'overwrite'], default='overwrite'),
-    )
+def main() -> None:
+    argument_spec = {
+        "name": {"type": "str", "required": True},
+        "tag": {"type": "str", "default": "latest"},
+        "repository": {"type": "list", "elements": "str", "required": True},
+        "existing_images": {
+            "type": "str",
+            "choices": ["keep", "overwrite"],
+            "default": "overwrite",
+        },
+    }
 
     client = AnsibleDockerClient(
         argument_spec=argument_spec,
@@ -264,12 +289,16 @@ def main():
         results = ImageTagger(client).tag_images()
         client.module.exit_json(**results)
     except DockerException as e:
-        client.fail('An unexpected Docker error occurred: {0}'.format(to_native(e)), exception=traceback.format_exc())
+        client.fail(
+            f"An unexpected Docker error occurred: {e}",
+            exception=traceback.format_exc(),
+        )
     except RequestException as e:
         client.fail(
-            'An unexpected requests error occurred when trying to talk to the Docker daemon: {0}'.format(to_native(e)),
-            exception=traceback.format_exc())
+            f"An unexpected requests error occurred when trying to talk to the Docker daemon: {e}",
+            exception=traceback.format_exc(),
+        )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

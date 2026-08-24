@@ -4,8 +4,7 @@
 # GNU General Public License v3.0+ (see LICENSES/GPL-3.0-or-later.txt or https://www.gnu.org/licenses/gpl-3.0.txt)
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from __future__ import absolute_import, division, print_function
-__metaclass__ = type
+from __future__ import annotations
 
 DOCUMENTATION = r"""
 module: docker_image_build
@@ -19,9 +18,9 @@ description:
   - Note that the module is B(not idempotent) in the sense of classical Ansible modules. The only idempotence check is whether
     the built image already exists. This check can be disabled with the O(rebuild) option.
 extends_documentation_fragment:
-  - community.docker.docker.cli_documentation
-  - community.docker.attributes
-  - community.docker.attributes.actiongroup_docker
+  - community.docker._docker.cli_documentation
+  - community.docker._attributes
+  - community.docker._attributes.actiongroup_docker
 
 attributes:
   check_mode:
@@ -247,6 +246,7 @@ seealso:
 """
 
 EXAMPLES = r"""
+---
 - name: Build Python 3.12 image
   community.docker.docker_image_build:
     name: localhost/python/3.12:latest
@@ -284,26 +284,26 @@ import traceback
 import select
 import subprocess
 import sys
+import typing as t
 
-from ansible.module_utils.common.text.converters import to_native
+from ansible.module_utils.common.text.converters import to_text
 from ansible.module_utils.common.text.formatters import human_to_bytes
 
-from ansible_collections.community.docker.plugins.module_utils.common_cli import (
+from ansible_collections.community.docker.plugins.module_utils._api.utils.utils import (
+    parse_repository_tag,
+)
+from ansible_collections.community.docker.plugins.module_utils._common_cli import (
     AnsibleModuleDockerClient,
     DockerException,
 )
-
-from ansible_collections.community.docker.plugins.module_utils.util import (
+from ansible_collections.community.docker.plugins.module_utils._util import (
     DockerBaseClass,
     clean_dict_booleans_for_docker_api,
     is_image_name_id,
     is_valid_tag,
 )
-
-from ansible_collections.community.docker.plugins.module_utils.version import LooseVersion
-
-from ansible_collections.community.docker.plugins.module_utils._api.utils.utils import (
-    parse_repository_tag,
+from ansible_collections.community.docker.plugins.module_utils._version import (
+    LooseVersion,
 )
 stdout = sys.__stdout__
 
@@ -333,79 +333,101 @@ def printOutputs(proc):
                 stderr += data
         rl, wl, xl = select.select(ios, [], [], 0.1)
     return (stdout, stderr)
+  
+if t.TYPE_CHECKING:
+    from ansible.module_utils.basic import AnsibleModule
 
-def convert_to_bytes(value, module, name, unlimited_value=None):
+
+def convert_to_bytes(
+    value: str | None,
+    module: AnsibleModule,
+    name: str,
+    unlimited_value: int | None = None,
+) -> int | None:
     if value is None:
         return value
     try:
-        if unlimited_value is not None and value in ('unlimited', str(unlimited_value)):
+        if unlimited_value is not None and value in ("unlimited", str(unlimited_value)):
             return unlimited_value
         return human_to_bytes(value)
     except ValueError as exc:
-        module.fail_json(msg='Failed to convert %s to bytes: %s' % (name, to_native(exc)))
+        module.fail_json(msg=f"Failed to convert {name} to bytes: {exc}")
 
 
-def dict_to_list(dictionary, concat='='):
-    return ['%s%s%s' % (k, concat, v) for k, v in sorted(dictionary.items())]
+def dict_to_list(dictionary: dict[str, t.Any], concat: str = "=") -> list[str]:
+    return [f"{k}{concat}{v}" for k, v in sorted(dictionary.items())]
 
 
-def _quote_csv(input):
-    if input.strip() == input and all(i not in input for i in '",\r\n'):
-        return input
-    return '"{0}"'.format(input.replace('"', '""'))
+def _quote_csv(text: str) -> str:
+    if text.strip() == text and all(i not in text for i in '",\r\n'):
+        return text
+    text = text.replace('"', '""')
+    return f'"{text}"'
 
 class ImageBuilder(DockerBaseClass):
-    def __init__(self, client):
-        super(ImageBuilder, self).__init__()
+    def __init__(self, client: AnsibleModuleDockerClient) -> None:
+        super().__init__()
         self.client = client
         self.check_mode = self.client.check_mode
         parameters = self.client.module.params
 
-        self.cache_from = parameters['cache_from']
-        self.pull = parameters['pull']
-        self.network = parameters['network']
-        self.nocache = parameters['nocache']
-        self.etc_hosts = clean_dict_booleans_for_docker_api(parameters['etc_hosts'])
-        self.args = clean_dict_booleans_for_docker_api(parameters['args'])
-        self.target = parameters['target']
-        self.platform = parameters['platform']
-        self.shm_size = convert_to_bytes(parameters['shm_size'], self.client.module, 'shm_size')
-        self.labels = clean_dict_booleans_for_docker_api(parameters['labels'])
-        self.rebuild = parameters['rebuild']
-        self.secrets = parameters['secrets']
-        self.outputs = parameters['outputs']
+        self.cache_from = parameters["cache_from"]
+        self.pull = parameters["pull"]
+        self.network = parameters["network"]
+        self.nocache = parameters["nocache"]
+        self.etc_hosts = clean_dict_booleans_for_docker_api(parameters["etc_hosts"])
+        self.args = clean_dict_booleans_for_docker_api(parameters["args"])
+        self.target = parameters["target"]
+        self.platform = parameters["platform"]
+        self.shm_size = convert_to_bytes(
+            parameters["shm_size"], self.client.module, "shm_size"
+        )
+        self.labels = clean_dict_booleans_for_docker_api(parameters["labels"])
+        self.rebuild = parameters["rebuild"]
+        self.secrets = parameters["secrets"]
+        self.outputs = parameters["outputs"]
 
-        buildx = self.client.get_client_plugin_info('buildx')
+        buildx = self.client.get_client_plugin_info("buildx")
         if buildx is None:
-            self.fail('Docker CLI {0} does not have the buildx plugin installed'.format(self.client.get_cli()))
-        buildx_version = buildx['Version'].lstrip('v')
+            self.fail(
+                f"Docker CLI {self.client.get_cli()} does not have the buildx plugin installed"
+            )
+        buildx_version = buildx["Version"].lstrip("v")
 
         if self.secrets:
             for secret in self.secrets:
-                if secret['type'] in ('env', 'value'):
-                    if LooseVersion(buildx_version) < LooseVersion('0.6.0'):
-                        self.fail('The Docker buildx plugin has version {version}, but 0.6.0 is needed for secrets of type=env and type=value'.format(
-                            version=buildx_version,
-                        ))
-        if self.outputs and len(self.outputs) > 1:
-            if LooseVersion(buildx_version) < LooseVersion('0.13.0'):
-                self.fail('The Docker buildx plugin has version {version}, but 0.13.0 is needed to specify more than one output'.format(
-                    version=buildx_version,
-                ))
+                if secret["type"] in ("env", "value") and LooseVersion(
+                    buildx_version
+                ) < LooseVersion("0.6.0"):
+                    self.fail(
+                        f"The Docker buildx plugin has version {buildx_version}, but 0.6.0 is needed for secrets of type=env and type=value"
+                    )
+        if (
+            self.outputs
+            and len(self.outputs) > 1
+            and LooseVersion(buildx_version) < LooseVersion("0.13.0")
+        ):
+            self.fail(
+                f"The Docker buildx plugin has version {buildx_version}, but 0.13.0 is needed to specify more than one output"
+            )
 
-        self.path = parameters['path']
+        self.path = parameters["path"]
         if not os.path.isdir(self.path):
-            self.fail('"{0}" is not an existing directory'.format(self.path))
-        self.dockerfile = parameters['dockerfile']
-        if self.dockerfile and not os.path.isfile(os.path.join(self.path, self.dockerfile)):
-            self.fail('"{0}" is not an existing file'.format(os.path.join(self.path, self.dockerfile)))
+            self.fail(f'"{self.path}" is not an existing directory')
+        self.dockerfile = parameters["dockerfile"]
+        if self.dockerfile and not os.path.isfile(
+            os.path.join(self.path, self.dockerfile)
+        ):
+            self.fail(
+                f'"{os.path.join(self.path, self.dockerfile)}" is not an existing file'
+            )
 
-        self.name = parameters['name']
-        self.tag = parameters['tag']
+        self.name = parameters["name"]
+        self.tag = parameters["tag"]
         if not is_valid_tag(self.tag, allow_empty=True):
-            self.fail('"{0}" is not a valid docker tag'.format(self.tag))
+            self.fail(f'"{self.tag}" is not a valid docker tag')
         if is_image_name_id(self.name):
-            self.fail('Image name must not be a digest')
+            self.fail("Image name must not be a digest")
 
         # If name contains a tag, it takes precedence over tag parameter.
         repo, repo_tag = parse_repository_tag(self.name)
@@ -414,127 +436,138 @@ class ImageBuilder(DockerBaseClass):
             self.tag = repo_tag
 
         if is_image_name_id(self.tag):
-            self.fail('Image name must not contain a digest, but have a tag')
+            self.fail("Image name must not contain a digest, but have a tag")
 
         if self.outputs:
             found = False
-            name_tag = '%s:%s' % (self.name, self.tag)
+            name_tag = f"{self.name}:{self.tag}"
             for output in self.outputs:
-                if output['type'] == 'image':
-                    if not output['name']:
+                if output["type"] == "image":
+                    if not output["name"]:
                         # Since we no longer pass --tag if --output is provided, we need to set this manually
-                        output['name'] = [name_tag]
-                    if output['name'] and name_tag in output['name']:
+                        output["name"] = [name_tag]
+                    if output["name"] and name_tag in output["name"]:
                         found = True
             if not found:
-                self.outputs.append({
-                    'type': 'image',
-                    'name': [name_tag],
-                    'push': False,
-                })
-                if LooseVersion(buildx_version) < LooseVersion('0.13.0'):
+                self.outputs.append(
+                    {
+                        "type": "image",
+                        "name": [name_tag],
+                        "push": False,
+                    }
+                )
+                if LooseVersion(buildx_version) < LooseVersion("0.13.0"):
                     self.fail(
-                        "The output does not include an image with name {name_tag}, and the Docker"
-                        " buildx plugin has version {version} which only supports one output.".format(
-                            name_tag=name_tag,
-                            version=buildx_version,
-                        ),
+                        f"The output does not include an image with name {name_tag}, and the Docker"
+                        f" buildx plugin has version {buildx_version} which only supports one output."
                     )
 
-    def fail(self, msg, **kwargs):
+    def fail(self, msg: str, **kwargs: t.Any) -> t.NoReturn:
         self.client.fail(msg, **kwargs)
 
-    def add_list_arg(self, args, option, values):
+    def add_list_arg(self, args: list[str], option: str, values: list[str]) -> None:
         for value in values:
             args.extend([option, value])
 
-    def add_args(self, args):
+    def add_args(self, args: list[str]) -> dict[str, t.Any]:
         environ_update = {}
         if not self.outputs:
-            args.extend(['--tag', '%s:%s' % (self.name, self.tag)])
+            args.extend(["--tag", f"{self.name}:{self.tag}"])
         if self.dockerfile:
-            args.extend(['--file', os.path.join(self.path, self.dockerfile)])
+            args.extend(["--file", os.path.join(self.path, self.dockerfile)])
         if self.cache_from:
-            self.add_list_arg(args, '--cache-from', self.cache_from)
+            self.add_list_arg(args, "--cache-from", self.cache_from)
         if self.pull:
-            args.append('--pull')
+            args.append("--pull")
         if self.network:
-            args.extend(['--network', self.network])
+            args.extend(["--network", self.network])
         if self.nocache:
-            args.append('--no-cache')
+            args.append("--no-cache")
         if self.etc_hosts:
-            self.add_list_arg(args, '--add-host', dict_to_list(self.etc_hosts, ':'))
+            self.add_list_arg(args, "--add-host", dict_to_list(self.etc_hosts, ":"))
         if self.args:
-            self.add_list_arg(args, '--build-arg', dict_to_list(self.args))
+            self.add_list_arg(args, "--build-arg", dict_to_list(self.args))
         if self.target:
-            args.extend(['--target', self.target])
+            args.extend(["--target", self.target])
         if self.platform:
             for platform in self.platform:
-                args.extend(['--platform', platform])
+                args.extend(["--platform", platform])
         if self.shm_size:
-            args.extend(['--shm-size', str(self.shm_size)])
+            args.extend(["--shm-size", str(self.shm_size)])
         if self.labels:
-            self.add_list_arg(args, '--label', dict_to_list(self.labels))
+            self.add_list_arg(args, "--label", dict_to_list(self.labels))
         if self.secrets:
             random_prefix = None
             for index, secret in enumerate(self.secrets):
-                if secret['type'] == 'file':
-                    args.extend(['--secret', 'id={id},type=file,src={src}'.format(id=secret['id'], src=secret['src'])])
-                if secret['type'] == 'env':
-                    args.extend(['--secret', 'id={id},type=env,env={env}'.format(id=secret['id'], env=secret['src'])])
-                if secret['type'] == 'value':
+                sid = secret["id"]
+                if secret["type"] == "file":
+                    src = secret["src"]
+                    args.extend(["--secret", f"id={sid},type=file,src={src}"])
+                if secret["type"] == "env":
+                    env = secret["src"]
+                    args.extend(["--secret", f"id={sid},type=env,env={env}"])
+                if secret["type"] == "value":
                     # We pass values on using environment variables. The user has been warned in the documentation
                     # that they should only use this mechanism when being comfortable with it.
                     if random_prefix is None:
                         # Use /dev/urandom to generate some entropy to make the environment variable's name unguessable
-                        random_prefix = base64.b64encode(os.urandom(16)).decode('utf-8').replace('=', '')
-                    env_name = 'ANSIBLE_DOCKER_COMPOSE_ENV_SECRET_{random}_{id}'.format(
-                        random=random_prefix,
-                        id=index,
+                        random_prefix = (
+                            base64.b64encode(os.urandom(16))
+                            .decode("utf-8")
+                            .replace("=", "")
+                        )
+                    env_name = (
+                        f"ANSIBLE_DOCKER_COMPOSE_ENV_SECRET_{random_prefix}_{index}"
                     )
-                    environ_update[env_name] = secret['value']
-                    args.extend(['--secret', 'id={id},type=env,env={env}'.format(id=secret['id'], env=env_name)])
+                    environ_update[env_name] = secret["value"]
+                    args.extend(["--secret", f"id={sid},type=env,env={env_name}"])
         if self.outputs:
             for output in self.outputs:
                 subargs = []
-                if output['type'] == 'local':
-                    subargs.extend(['type=local', 'dest={dest}'.format(dest=output['dest'])])
-                if output['type'] == 'tar':
-                    subargs.extend(['type=tar', 'dest={dest}'.format(dest=output['dest'])])
-                if output['type'] == 'oci':
-                    subargs.extend(['type=oci', 'dest={dest}'.format(dest=output['dest'])])
-                if output['type'] == 'docker':
-                    args.extend(["--tag", '%s:%s' % (self.name, self.tag)])
-                    subargs.append('type=docker')
-                    if output['dest'] is not None:
-                        subargs.append('dest={dest}'.format(dest=output['dest']))
-                    if output['context'] is not None:
-                        subargs.append('context={context}'.format(context=output['context']))
-                if output['type'] == 'image':
-                    subargs.append('type=image')
-                    if output['name'] is not None:
-                        subargs.append('name={name}'.format(name=','.join(output['name'])))
-                    if output['push']:
-                        subargs.append('push=true')
+                if output["type"] == "local":
+                    dest = output["dest"]
+                    subargs.extend(["type=local", f"dest={dest}"])
+                if output["type"] == "tar":
+                    dest = output["dest"]
+                    subargs.extend(["type=tar", f"dest={dest}"])
+                if output["type"] == "oci":
+                    dest = output["dest"]
+                    subargs.extend(["type=oci", f"dest={dest}"])
+                if output["type"] == "docker":
+                    subargs.append("type=docker")
+                    dest = output["dest"]
+                    if output["dest"] is not None:
+                        subargs.append(f"dest={dest}")
+                    if output["context"] is not None:
+                        context = output["context"]
+                        subargs.append(f"context={context}")
+                if output["type"] == "image":
+                    subargs.append("type=image")
+                    if output["name"] is not None:
+                        name = ",".join(output["name"])
+                        subargs.append(f"name={name}")
+                    if output["push"]:
+                        subargs.append("push=true")
                 if subargs:
-                    args.extend(['--output', ','.join(_quote_csv(subarg) for subarg in subargs)])
+                    args.extend(
+                        ["--output", ",".join(_quote_csv(subarg) for subarg in subargs)]
+                    )
         return environ_update
 
-    def build_image(self):
+    def build_image(self) -> dict[str, t.Any]:
         image = self.client.find_image(self.name, self.tag)
-        results = dict(
-            changed=False,
-            actions=[],
-            image=image or {},
-        )
+        results: dict[str, t.Any] = {
+            "changed": False,
+            "actions": [],
+            "image": image or {},
+        }
 
-        if image:
-            if self.rebuild == 'never':
-                return results
+        if image and self.rebuild == "never":
+            return results
 
-        results['changed'] = True
+        results["changed"] = True
         if not self.check_mode:
-            args = ['buildx', 'build', '--progress', 'plain']
+            args = ["buildx", "build", "--progress", "plain"]
             environ_update = self.add_args(args)
             args.extend(['--', self.path])
             # time for "fun"
@@ -554,76 +587,90 @@ class ImageBuilder(DockerBaseClass):
             stderr += e
 
             rc = proc.poll()
+            args.extend(["--", self.path])
             if rc != 0:
-                self.fail('Building %s:%s failed' % (self.name, self.tag), stdout=to_native(stdout), stderr=to_native(stderr), command=args)
-            results['stdout'] = to_native(stdout)
-            results['stderr'] = to_native(stderr)
-            results['image'] = self.client.find_image(self.name, self.tag) or {}
-            results['command'] = args
+                self.fail(
+                    f"Building {self.name}:{self.tag} failed",
+                    stdout=to_text(stdout),
+                    stderr=to_text(stderr),
+                    command=args,
+                )
+            results["stdout"] = to_text(stdout)
+            results["stderr"] = to_text(stderr)
+            results["image"] = self.client.find_image(self.name, self.tag) or {}
+            results["command"] = args
 
         return results
 
 
-def main():
-    argument_spec = dict(
-        name=dict(type='str', required=True),
-        tag=dict(type='str', default='latest'),
-        path=dict(type='path', required=True),
-        dockerfile=dict(type='str'),
-        cache_from=dict(type='list', elements='str'),
-        pull=dict(type='bool', default=False),
-        network=dict(type='str'),
-        nocache=dict(type='bool', default=False),
-        etc_hosts=dict(type='dict'),
-        args=dict(type='dict'),
-        target=dict(type='str'),
-        platform=dict(type='list', elements='str'),
-        shm_size=dict(type='str'),
-        labels=dict(type='dict'),
-        rebuild=dict(type='str', choices=['never', 'always'], default='never'),
-        secrets=dict(
-            type='list',
-            elements='dict',
-            options=dict(
-                id=dict(type='str', required=True),
-                type=dict(type='str', choices=['file', 'env', 'value'], required=True),
-                src=dict(type='path'),
-                env=dict(type='str'),
-                value=dict(type='str', no_log=True),
-            ),
-            required_if=[
-                ('type', 'file', ['src']),
-                ('type', 'env', ['env']),
-                ('type', 'value', ['value']),
+def main() -> None:
+    argument_spec = {
+        "name": {"type": "str", "required": True},
+        "tag": {"type": "str", "default": "latest"},
+        "path": {"type": "path", "required": True},
+        "dockerfile": {"type": "str"},
+        "cache_from": {"type": "list", "elements": "str"},
+        "pull": {"type": "bool", "default": False},
+        "network": {"type": "str"},
+        "nocache": {"type": "bool", "default": False},
+        "etc_hosts": {"type": "dict"},
+        "args": {"type": "dict"},
+        "target": {"type": "str"},
+        "platform": {"type": "list", "elements": "str"},
+        "shm_size": {"type": "str"},
+        "labels": {"type": "dict"},
+        "rebuild": {"type": "str", "choices": ["never", "always"], "default": "never"},
+        "secrets": {
+            "type": "list",
+            "elements": "dict",
+            "options": {
+                "id": {"type": "str", "required": True},
+                "type": {
+                    "type": "str",
+                    "choices": ["file", "env", "value"],
+                    "required": True,
+                },
+                "src": {"type": "path"},
+                "env": {"type": "str"},
+                "value": {"type": "str", "no_log": True},
+            },
+            "required_if": [
+                ("type", "file", ["src"]),
+                ("type", "env", ["env"]),
+                ("type", "value", ["value"]),
             ],
-            mutually_exclusive=[
-                ('src', 'env', 'value'),
+            "mutually_exclusive": [
+                ("src", "env", "value"),
             ],
-            no_log=False,
-        ),
-        outputs=dict(
-            type='list',
-            elements='dict',
-            options=dict(
-                type=dict(type='str', choices=['local', 'tar', 'oci', 'docker', 'image'], required=True),
-                dest=dict(type='path'),
-                context=dict(type='str'),
-                name=dict(type='list', elements='str'),
-                push=dict(type='bool', default=False),
-            ),
-            required_if=[
-                ('type', 'local', ['dest']),
-                ('type', 'tar', ['dest']),
-                ('type', 'oci', ['dest']),
+            "no_log": False,
+        },
+        "outputs": {
+            "type": "list",
+            "elements": "dict",
+            "options": {
+                "type": {
+                    "type": "str",
+                    "choices": ["local", "tar", "oci", "docker", "image"],
+                    "required": True,
+                },
+                "dest": {"type": "path"},
+                "context": {"type": "str"},
+                "name": {"type": "list", "elements": "str"},
+                "push": {"type": "bool", "default": False},
+            },
+            "required_if": [
+                ("type", "local", ["dest"]),
+                ("type", "tar", ["dest"]),
+                ("type", "oci", ["dest"]),
             ],
-            mutually_exclusive=[
-                ('dest', 'name'),
-                ('dest', 'push'),
-                ('context', 'name'),
-                ('context', 'push'),
+            "mutually_exclusive": [
+                ("dest", "name"),
+                ("dest", "push"),
+                ("context", "name"),
+                ("context", "push"),
             ],
-        ),
-    )
+        },
+    }
 
     client = AnsibleModuleDockerClient(
         argument_spec=argument_spec,
@@ -635,8 +682,11 @@ def main():
         results = ImageBuilder(client).build_image()
         client.module.exit_json(**results)
     except DockerException as e:
-        client.fail('An unexpected Docker error occurred: {0}'.format(to_native(e)), exception=traceback.format_exc())
+        client.fail(
+            f"An unexpected Docker error occurred: {e}",
+            exception=traceback.format_exc(),
+        )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

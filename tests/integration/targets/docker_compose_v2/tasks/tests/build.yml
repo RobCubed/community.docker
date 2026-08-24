@@ -18,13 +18,13 @@
 
   block:
     - name: Registering container name
-      set_fact:
+      ansible.builtin.set_fact:
         cnames: "{{ cnames + [pname ~ '-' ~ cname ~ '-1'] }}"
         dnetworks: "{{ dnetworks + [pname ~ '_default'] }}"
         images: "{{ images + [iname] }}"
 
     - name: Create project directory
-      file:
+      ansible.builtin.file:
         path: '{{ item }}'
         state: directory
       loop:
@@ -32,45 +32,45 @@
         - '{{ project_src }}/build'
 
     - name: Template default project file
-      copy:
+      ansible.builtin.copy:
         dest: '{{ project_src }}/docker-compose.yml'
         content: '{{ test_service }}'
 
     - name: Template Dockerfile
-      copy:
+      ansible.builtin.copy:
         dest: '{{ project_src }}/build/Dockerfile'
         content: |
           FROM {{ docker_test_image_alpine }}
           ENTRYPOINT ["/bin/sh", "-c", "sleep 10m"]
 
     - name: Present (check)
-      docker_compose_v2:
+      community.docker.docker_compose_v2:
         project_src: '{{ project_src }}'
         state: present
       check_mode: true
       register: present_1_check
 
     - name: Present
-      docker_compose_v2:
+      community.docker.docker_compose_v2:
         project_src: '{{ project_src }}'
         state: present
       register: present_1
 
     - name: Present (idempotent check)
-      docker_compose_v2:
+      community.docker.docker_compose_v2:
         project_src: '{{ project_src }}'
         state: present
       check_mode: true
       register: present_2_check
 
     - name: Present (idempotent)
-      docker_compose_v2:
+      community.docker.docker_compose_v2:
         project_src: '{{ project_src }}'
         state: present
       register: present_2
 
     - name: Present (idempotent check, build=always, ignore_build_events=false)
-      docker_compose_v2:
+      community.docker.docker_compose_v2:
         project_src: '{{ project_src }}'
         state: present
         build: always
@@ -79,7 +79,7 @@
       register: present_3_check
 
     - name: Present (idempotent, build=always, ignore_build_events=false)
-      docker_compose_v2:
+      community.docker.docker_compose_v2:
         project_src: '{{ project_src }}'
         state: present
         build: always
@@ -87,7 +87,7 @@
       register: present_3
 
     - name: Present (idempotent check, build=always, ignore_build_events=true)
-      docker_compose_v2:
+      community.docker.docker_compose_v2:
         project_src: '{{ project_src }}'
         state: present
         build: always
@@ -96,40 +96,48 @@
       register: present_4_check
 
     - name: Present (idempotent, build=always, ignore_build_events=true)
-      docker_compose_v2:
+      community.docker.docker_compose_v2:
         project_src: '{{ project_src }}'
         state: present
         build: always
         ignore_build_events: true
       register: present_4
 
-    - assert:
+    - ansible.builtin.assert:
         that:
           - present_1_check is changed
-          - present_1_check.warnings | default([]) | select('regex', ' Please report this at ') | length == 0
+          - present_1_check.warnings | default([]) | select('regex', ' please report this at ') | length == 0
           - present_1 is changed
           - present_1.containers | length == 1
           - present_1.containers[0].Name == (pname ~ '-' ~ cname ~ '-1')
           - present_1.images | length == 1
-          - present_1.images[0].ContainerName == (pname ~ '-' ~ cname ~ '-1')
+          - >-
+            docker_compose_version is version('2.37.0', '>=') or
+            present_1.images[0].ContainerName == (pname ~ '-' ~ cname ~ '-1')
           - present_1.images[0].Repository == iname
           - present_1.images[0].Tag == "latest"
-          - present_1.warnings | default([]) | select('regex', ' Please report this at ') | length == 0
+          - present_1.warnings | default([]) | select('regex', ' please report this at ') | length == 0
           - present_2_check is not changed
-          - present_2_check.warnings | default([]) | select('regex', ' Please report this at ') | length == 0
+          - present_2_check.warnings | default([]) | select('regex', ' please report this at ') | length == 0
           - present_2 is not changed
-          - present_2.warnings | default([]) | select('regex', ' Please report this at ') | length == 0
-          - present_3_check is changed
-          - present_3_check.warnings | default([]) | select('regex', ' Please report this at ') | length == 0
-          - ((present_3 is changed) if docker_compose_version is version('2.31.0', '>=') and docker_compose_version is version('2.32.2', '<') else (present_3 is not changed))
-          - present_3.warnings | default([]) | select('regex', ' Please report this at ') | length == 0
-          - present_4_check is changed
-          - present_4_check.warnings | default([]) | select('regex', ' Please report this at ') | length == 0
-          - present_4 is not changed
-          - present_4.warnings | default([]) | select('regex', ' Please report this at ') | length == 0
+          - present_2.warnings | default([]) | select('regex', ' please report this at ') | length == 0
+          # - present_3_check is changed   -- whether this is true depends on a combination of Docker CLI and Docker Compose version...
+          # Compose 2.37.3 with Docker 28.2.x results in 'changed', while Compose 2.37.3 with Docker 28.3.0 results in 'not changed'.
+          # It seems that Docker is now clever enough to notice that nothing is rebuilt...
+          # With Docker 29.0.0, the behvaior seems to change again... I'm currently tending to simply ignore this check, for that
+          # reason the next three lines are commented out:
+          # - present_3_check.warnings | default([]) | select('regex', ' please report this at ') | length == 0
+          # - ((present_3 is changed) if docker_compose_version is version('2.31.0', '>=') and docker_compose_version is version('2.32.2', '<') else (present_3 is not changed))
+          # - present_3.warnings | default([]) | select('regex', ' please report this at ') | length == 0
+          # Same as above:
+          # - present_4_check is changed
+          - present_4_check.warnings | default([]) | select('regex', ' please report this at ') | length == 0
+          # Also seems like a hopeless case with Docker 29:
+          # - present_4 is not changed
+          - present_4.warnings | default([]) | select('regex', ' please report this at ') | length == 0
 
   always:
     - name: Cleanup
-      docker_compose_v2:
+      community.docker.docker_compose_v2:
         project_src: '{{ project_src }}'
         state: absent

@@ -4,9 +4,7 @@
 # GNU General Public License v3.0+ (see LICENSES/GPL-3.0-or-later.txt or https://www.gnu.org/licenses/gpl-3.0.txt)
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from __future__ import absolute_import, division, print_function
-
-__metaclass__ = type
+from __future__ import annotations
 
 DOCUMENTATION = r"""
 module: docker_swarm_info
@@ -24,12 +22,12 @@ author:
   - Piotr Wojciechowski (@WojciechowskiPiotr)
 
 extends_documentation_fragment:
-  - community.docker.docker
-  - community.docker.docker.docker_py_1_documentation
-  - community.docker.attributes
-  - community.docker.attributes.actiongroup_docker
-  - community.docker.attributes.info_module
-  - community.docker.attributes.idempotent_not_modify_state
+  - community.docker._docker
+  - community.docker._docker.docker_py_2_documentation
+  - community.docker._attributes
+  - community.docker._attributes.actiongroup_docker
+  - community.docker._attributes.info_module
+  - community.docker._attributes.idempotent_not_modify_state
 
 options:
   nodes:
@@ -84,11 +82,12 @@ options:
     default: false
 
 requirements:
-  - "L(Docker SDK for Python,https://docker-py.readthedocs.io/en/stable/) >= 1.10.0"
+  - "L(Docker SDK for Python,https://docker-py.readthedocs.io/en/stable/) >= 2.0.0"
   - "Docker API >= 1.25"
 """
 
 EXAMPLES = r"""
+---
 - name: Get info on Docker Swarm
   community.docker.docker_swarm_info:
   ignore_errors: true
@@ -186,194 +185,226 @@ tasks:
 """
 
 import traceback
+import typing as t
 
 try:
-    from docker.errors import DockerException, APIError
+    from docker.errors import APIError, DockerException
 except ImportError:
     # missing Docker SDK for Python handled in ansible.module_utils.docker_common
     pass
 
-from ansible.module_utils.common.text.converters import to_native
-
-from ansible_collections.community.docker.plugins.module_utils.swarm import AnsibleDockerSwarmClient
-from ansible_collections.community.docker.plugins.module_utils.common import RequestException
-from ansible_collections.community.docker.plugins.module_utils.util import (
+from ansible_collections.community.docker.plugins.module_utils._common import (
+    RequestException,
+)
+from ansible_collections.community.docker.plugins.module_utils._swarm import (
+    AnsibleDockerSwarmClient,
+)
+from ansible_collections.community.docker.plugins.module_utils._util import (
     DockerBaseClass,
     clean_dict_booleans_for_docker_api,
 )
 
 
 class DockerSwarmManager(DockerBaseClass):
-
-    def __init__(self, client, results):
-
-        super(DockerSwarmManager, self).__init__()
+    def __init__(
+        self, client: AnsibleDockerSwarmClient, results: dict[str, t.Any]
+    ) -> None:
+        super().__init__()
 
         self.client = client
         self.results = results
-        self.verbose_output = self.client.module.params['verbose_output']
+        self.verbose_output = self.client.module.params["verbose_output"]
 
-        listed_objects = ['tasks', 'services', 'nodes']
+        listed_objects: list[t.Literal["nodes", "tasks", "services"]] = [
+            "tasks",
+            "services",
+            "nodes",
+        ]
 
         self.client.fail_task_if_not_swarm_manager()
 
-        self.results['swarm_facts'] = self.get_docker_swarm_facts()
+        self.results["swarm_facts"] = self.get_docker_swarm_facts()
 
         for docker_object in listed_objects:
             if self.client.module.params[docker_object]:
                 returned_name = docker_object
                 filter_name = docker_object + "_filters"
-                filters = clean_dict_booleans_for_docker_api(client.module.params.get(filter_name))
-                self.results[returned_name] = self.get_docker_items_list(docker_object, filters)
-        if self.client.module.params['unlock_key']:
-            self.results['swarm_unlock_key'] = self.get_docker_swarm_unlock_key()
+                filters = clean_dict_booleans_for_docker_api(
+                    client.module.params.get(filter_name)
+                )
+                self.results[returned_name] = self.get_docker_items_list(
+                    docker_object, filters
+                )
+        if self.client.module.params["unlock_key"]:
+            self.results["swarm_unlock_key"] = self.get_docker_swarm_unlock_key()
 
-    def get_docker_swarm_facts(self):
+    def get_docker_swarm_facts(self) -> dict[str, t.Any]:
         try:
             return self.client.inspect_swarm()
         except APIError as exc:
-            self.client.fail("Error inspecting docker swarm: %s" % to_native(exc))
+            self.client.fail(f"Error inspecting docker swarm: {exc}")
 
-    def get_docker_items_list(self, docker_object=None, filters=None):
-        items = None
-        items_list = []
+    def get_docker_items_list(
+        self,
+        docker_object: t.Literal["nodes", "tasks", "services"],
+        filters: dict[str, str],
+    ) -> list[dict[str, t.Any]]:
+        items_list: list[dict[str, t.Any]] = []
 
         try:
-            if docker_object == 'nodes':
+            if docker_object == "nodes":
                 items = self.client.nodes(filters=filters)
-            elif docker_object == 'tasks':
+            elif docker_object == "tasks":
                 items = self.client.tasks(filters=filters)
-            elif docker_object == 'services':
+            elif docker_object == "services":
                 items = self.client.services(filters=filters)
+            else:
+                raise ValueError(f"Invalid docker_object {docker_object}")
         except APIError as exc:
-            self.client.fail("Error inspecting docker swarm for object '%s': %s" %
-                             (docker_object, to_native(exc)))
+            self.client.fail(
+                f"Error inspecting docker swarm for object '{docker_object}': {exc}"
+            )
 
         if self.verbose_output:
             return items
 
         for item in items:
-            item_record = dict()
+            item_record = {}
 
-            if docker_object == 'nodes':
+            if docker_object == "nodes":
                 item_record = self.get_essential_facts_nodes(item)
-            elif docker_object == 'tasks':
+            elif docker_object == "tasks":
                 item_record = self.get_essential_facts_tasks(item)
-            elif docker_object == 'services':
+            elif docker_object == "services":
                 item_record = self.get_essential_facts_services(item)
-                if item_record.get('Mode') == 'Global':
-                    item_record['Replicas'] = len(items)
+                if item_record.get("Mode") == "Global":
+                    item_record["Replicas"] = len(items)
             items_list.append(item_record)
 
         return items_list
 
     @staticmethod
-    def get_essential_facts_nodes(item):
-        object_essentials = dict()
+    def get_essential_facts_nodes(item: dict[str, t.Any]) -> dict[str, t.Any]:
+        object_essentials = {}
 
-        object_essentials['ID'] = item.get('ID')
-        object_essentials['Hostname'] = item['Description']['Hostname']
-        object_essentials['Status'] = item['Status']['State']
-        object_essentials['Availability'] = item['Spec']['Availability']
-        if 'ManagerStatus' in item:
-            object_essentials['ManagerStatus'] = item['ManagerStatus']['Reachability']
-            if 'Leader' in item['ManagerStatus'] and item['ManagerStatus']['Leader'] is True:
-                object_essentials['ManagerStatus'] = "Leader"
+        object_essentials["ID"] = item.get("ID")
+        object_essentials["Hostname"] = item["Description"]["Hostname"]
+        object_essentials["Status"] = item["Status"]["State"]
+        object_essentials["Availability"] = item["Spec"]["Availability"]
+        if "ManagerStatus" in item:
+            object_essentials["ManagerStatus"] = item["ManagerStatus"]["Reachability"]
+            if (
+                "Leader" in item["ManagerStatus"]
+                and item["ManagerStatus"]["Leader"] is True
+            ):
+                object_essentials["ManagerStatus"] = "Leader"
         else:
-            object_essentials['ManagerStatus'] = None
-        object_essentials['EngineVersion'] = item['Description']['Engine']['EngineVersion']
+            object_essentials["ManagerStatus"] = None
+        object_essentials["EngineVersion"] = item["Description"]["Engine"][
+            "EngineVersion"
+        ]
 
         return object_essentials
 
-    def get_essential_facts_tasks(self, item):
-        object_essentials = dict()
+    def get_essential_facts_tasks(self, item: dict[str, t.Any]) -> dict[str, t.Any]:
+        object_essentials = {}
 
-        object_essentials['ID'] = item['ID']
+        object_essentials["ID"] = item["ID"]
         # Returning container ID to not trigger another connection to host
         # Container ID is sufficient to get extended info in other tasks
-        object_essentials['ContainerID'] = item['Status']['ContainerStatus']['ContainerID']
-        object_essentials['Image'] = item['Spec']['ContainerSpec']['Image']
-        object_essentials['Node'] = self.client.get_node_name_by_id(item['NodeID'])
-        object_essentials['DesiredState'] = item['DesiredState']
-        object_essentials['CurrentState'] = item['Status']['State']
-        if 'Err' in item['Status']:
-            object_essentials['Error'] = item['Status']['Err']
+        object_essentials["ContainerID"] = item["Status"]["ContainerStatus"][
+            "ContainerID"
+        ]
+        object_essentials["Image"] = item["Spec"]["ContainerSpec"]["Image"]
+        object_essentials["Node"] = self.client.get_node_name_by_id(item["NodeID"])
+        object_essentials["DesiredState"] = item["DesiredState"]
+        object_essentials["CurrentState"] = item["Status"]["State"]
+        if "Err" in item["Status"]:
+            object_essentials["Error"] = item["Status"]["Err"]
         else:
-            object_essentials['Error'] = None
+            object_essentials["Error"] = None
 
         return object_essentials
 
     @staticmethod
-    def get_essential_facts_services(item):
-        object_essentials = dict()
+    def get_essential_facts_services(item: dict[str, t.Any]) -> dict[str, t.Any]:
+        object_essentials = {}
 
-        object_essentials['ID'] = item['ID']
-        object_essentials['Name'] = item['Spec']['Name']
-        if 'Replicated' in item['Spec']['Mode']:
-            object_essentials['Mode'] = "Replicated"
-            object_essentials['Replicas'] = item['Spec']['Mode']['Replicated']['Replicas']
-        elif 'Global' in item['Spec']['Mode']:
-            object_essentials['Mode'] = "Global"
+        object_essentials["ID"] = item["ID"]
+        object_essentials["Name"] = item["Spec"]["Name"]
+        if "Replicated" in item["Spec"]["Mode"]:
+            object_essentials["Mode"] = "Replicated"
+            object_essentials["Replicas"] = item["Spec"]["Mode"]["Replicated"][
+                "Replicas"
+            ]
+        elif "Global" in item["Spec"]["Mode"]:
+            object_essentials["Mode"] = "Global"
             # Number of replicas have to be updated in calling method or may be left as None
-            object_essentials['Replicas'] = None
-        object_essentials['Image'] = item['Spec']['TaskTemplate']['ContainerSpec']['Image']
-        if item['Spec'].get('EndpointSpec') and 'Ports' in item['Spec']['EndpointSpec']:
-            object_essentials['Ports'] = item['Spec']['EndpointSpec']['Ports']
+            object_essentials["Replicas"] = None
+        object_essentials["Image"] = item["Spec"]["TaskTemplate"]["ContainerSpec"][
+            "Image"
+        ]
+        if item["Spec"].get("EndpointSpec") and "Ports" in item["Spec"]["EndpointSpec"]:
+            object_essentials["Ports"] = item["Spec"]["EndpointSpec"]["Ports"]
         else:
-            object_essentials['Ports'] = []
+            object_essentials["Ports"] = []
 
         return object_essentials
 
-    def get_docker_swarm_unlock_key(self):
+    def get_docker_swarm_unlock_key(self) -> str | None:
         unlock_key = self.client.get_unlock_key() or {}
-        return unlock_key.get('UnlockKey') or None
+        return unlock_key.get("UnlockKey") or None
 
 
-def main():
-    argument_spec = dict(
-        nodes=dict(type='bool', default=False),
-        nodes_filters=dict(type='dict'),
-        tasks=dict(type='bool', default=False),
-        tasks_filters=dict(type='dict'),
-        services=dict(type='bool', default=False),
-        services_filters=dict(type='dict'),
-        unlock_key=dict(type='bool', default=False),
-        verbose_output=dict(type='bool', default=False),
-    )
-    option_minimal_versions = dict(
-        unlock_key=dict(docker_py_version='2.7.0'),
-    )
+def main() -> None:
+    argument_spec = {
+        "nodes": {"type": "bool", "default": False},
+        "nodes_filters": {"type": "dict"},
+        "tasks": {"type": "bool", "default": False},
+        "tasks_filters": {"type": "dict"},
+        "services": {"type": "bool", "default": False},
+        "services_filters": {"type": "dict"},
+        "unlock_key": {"type": "bool", "default": False},
+        "verbose_output": {"type": "bool", "default": False},
+    }
+    option_minimal_versions = {
+        "unlock_key": {"docker_py_version": "2.7.0"},
+    }
 
     client = AnsibleDockerSwarmClient(
         argument_spec=argument_spec,
         supports_check_mode=True,
-        min_docker_version='1.10.0',
+        min_docker_version="2.0.0",
         option_minimal_versions=option_minimal_versions,
-        fail_results=dict(
-            can_talk_to_docker=False,
-            docker_swarm_active=False,
-            docker_swarm_manager=False,
-        ),
+        fail_results={
+            "can_talk_to_docker": False,
+            "docker_swarm_active": False,
+            "docker_swarm_manager": False,
+        },
     )
-    client.fail_results['can_talk_to_docker'] = True
-    client.fail_results['docker_swarm_active'] = client.check_if_swarm_node()
-    client.fail_results['docker_swarm_manager'] = client.check_if_swarm_manager()
+    client.fail_results["can_talk_to_docker"] = True
+    client.fail_results["docker_swarm_active"] = client.check_if_swarm_node()
+    client.fail_results["docker_swarm_manager"] = client.check_if_swarm_manager()
 
     try:
-        results = dict(
-            changed=False,
-        )
+        results = {
+            "changed": False,
+        }
 
         DockerSwarmManager(client, results)
         results.update(client.fail_results)
         client.module.exit_json(**results)
     except DockerException as e:
-        client.fail('An unexpected docker error occurred: {0}'.format(to_native(e)), exception=traceback.format_exc())
+        client.fail(
+            f"An unexpected Docker error occurred: {e}",
+            exception=traceback.format_exc(),
+        )
     except RequestException as e:
         client.fail(
-            'An unexpected requests error occurred when Docker SDK for Python tried to talk to the docker daemon: {0}'.format(to_native(e)),
-            exception=traceback.format_exc())
+            f"An unexpected requests error occurred when Docker SDK for Python tried to talk to the docker daemon: {e}",
+            exception=traceback.format_exc(),
+        )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

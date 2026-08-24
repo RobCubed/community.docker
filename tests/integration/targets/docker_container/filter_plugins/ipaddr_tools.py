@@ -2,8 +2,7 @@
 # GNU General Public License v3.0+ (see LICENSES/GPL-3.0-or-later.txt or https://www.gnu.org/licenses/gpl-3.0.txt)
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from __future__ import absolute_import, division, print_function
-__metaclass__ = type
+from __future__ import annotations
 
 
 def _normalize_ipaddr(ipaddr):
@@ -12,7 +11,7 @@ def _normalize_ipaddr(ipaddr):
     return ipaddress.ip_address(ipaddr).compressed
 
 
-class FilterModule(object):
+class FilterModule:
     """ IP address and network manipulation filters """
 
     def filters(self):

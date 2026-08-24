@@ -4,11 +4,11 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 - name: Registering container name
-  set_fact:
+  ansible.builtin.set_fact:
     cname: "{{ cname_prefix ~ '-options' }}"
     cname2: "{{ cname_prefix ~ '-options-h1' }}"
 - name: Registering container name
-  set_fact:
+  ansible.builtin.set_fact:
     cnames: "{{ cnames + [cname, cname2] }}"
 
 ####################################################################
@@ -16,39 +16,39 @@
 ####################################################################
 
 - name: published_ports -- non-closing square bracket
-  docker_container:
+  community.docker.docker_container:
     image: "{{ docker_test_image_alpine }}"
     command: '/bin/sh -c "sleep 10m"'
     name: "{{ cname }}"
     state: started
     published_ports:
-    - "[::1:2000:3000"
+      - "[::1:2000:3000"
   register: published_ports_1
   ignore_errors: true
 
 - name: published_ports -- forgot square brackets for IPv6
-  docker_container:
+  community.docker.docker_container:
     image: "{{ docker_test_image_alpine }}"
     command: '/bin/sh -c "sleep 10m"'
     name: "{{ cname }}"
     state: started
     published_ports:
-    - "::1:2000:3000"
+      - "::1:2000:3000"
   register: published_ports_2
   ignore_errors: true
 
 - name: published_ports -- disallow hostnames
-  docker_container:
+  community.docker.docker_container:
     image: "{{ docker_test_image_alpine }}"
     command: '/bin/sh -c "sleep 10m"'
     name: "{{ cname }}"
     state: started
     published_ports:
-    - "foo:2000:3000"
+      - "foo:2000:3000"
   register: published_ports_3
   ignore_errors: true
 
-- assert:
+- ansible.builtin.assert:
     that:
       - published_ports_1 is failed
       - published_ports_1.msg == 'Cannot find closing "]" in input "[::1:2000:3000" for opening "[" at index 1!'
@@ -62,75 +62,171 @@
 ####################################################################
 
 - name: published_ports -- port range
-  docker_container:
+  community.docker.docker_container:
     image: "{{ docker_test_image_alpine }}"
     command: '/bin/sh -c "sleep 10m"'
     name: "{{ cname }}"
     state: started
     exposed_ports:
-    - "9001"
-    - "9010-9050"
+      - "9001"
+      - "9010-9050"
     published_ports:
-    - "9001:9001"
-    - "9010-9050:9010-9050"
+      - "9001:9001"
+      - "9010-9050:9010-9050"
     force_kill: true
   register: published_ports_1
 
 - name: published_ports -- port range (idempotency)
-  docker_container:
+  community.docker.docker_container:
     image: "{{ docker_test_image_alpine }}"
     command: '/bin/sh -c "sleep 10m"'
     name: "{{ cname }}"
     state: started
     exposed_ports:
-    - "9001"
-    - "9010-9050"
+      - "9001"
+      - "9010-9050"
     published_ports:
-    - "9001:9001"
-    - "9010-9050:9010-9050"
+      - "9001:9001"
+      - "9010-9050:9010-9050"
     force_kill: true
   register: published_ports_2
 
 - name: published_ports -- port range (different range)
-  docker_container:
+  community.docker.docker_container:
     image: "{{ docker_test_image_alpine }}"
     command: '/bin/sh -c "sleep 10m"'
     name: "{{ cname }}"
     state: started
     exposed_ports:
-    - "9001"
-    - "9010-9050"
+      - "9001"
+      - "9010-9050"
     published_ports:
-    - "9001:9001"
-    - "9020-9060:9020-9060"
+      - "9001:9001"
+      - "9020-9060:9020-9060"
     force_kill: true
   register: published_ports_3
 
+- name: published_ports -- port range (same range, but listed explicitly)
+  community.docker.docker_container:
+    image: "{{ docker_test_image_alpine }}"
+    command: '/bin/sh -c "sleep 10m"'
+    name: "{{ cname }}"
+    state: started
+    exposed_ports:
+      - "9001"
+      - "9010"
+      - "9011"
+      - "9012"
+      - "9013"
+      - "9014"
+      - "9015"
+      - "9016"
+      - "9017"
+      - "9018"
+      - "9019"
+      - "9020"
+      - "9021"
+      - "9022"
+      - "9023"
+      - "9024"
+      - "9025"
+      - "9026"
+      - "9027"
+      - "9028"
+      - "9029"
+      - "9030"
+      - "9031"
+      - "9032"
+      - "9033"
+      - "9034"
+      - "9035"
+      - "9036"
+      - "9037"
+      - "9038"
+      - "9039"
+      - "9040"
+      - "9041"
+      - "9042"
+      - "9043"
+      - "9044"
+      - "9045"
+      - "9046"
+      - "9047"
+      - "9048"
+      - "9049"
+      - "9050"
+    published_ports:
+      - "9001:9001"
+      - "9020:9020"
+      - "9021:9021"
+      - "9022:9022"
+      - "9023:9023"
+      - "9024:9024"
+      - "9025:9025"
+      - "9026:9026"
+      - "9027:9027"
+      - "9028:9028"
+      - "9029:9029"
+      - "9030:9030"
+      - "9031:9031"
+      - "9032:9032"
+      - "9033:9033"
+      - "9034:9034"
+      - "9035:9035"
+      - "9036:9036"
+      - "9037:9037"
+      - "9038:9038"
+      - "9039:9039"
+      - "9040:9040"
+      - "9041:9041"
+      - "9042:9042"
+      - "9043:9043"
+      - "9044:9044"
+      - "9045:9045"
+      - "9046:9046"
+      - "9047:9047"
+      - "9048:9048"
+      - "9049:9049"
+      - "9050:9050"
+      - "9051:9051"
+      - "9052:9052"
+      - "9053:9053"
+      - "9054:9054"
+      - "9055:9055"
+      - "9056:9056"
+      - "9057:9057"
+      - "9058:9058"
+      - "9059:9059"
+      - "9060:9060"
+    force_kill: true
+  register: published_ports_4
+
 - name: cleanup
-  docker_container:
+  community.docker.docker_container:
     name: "{{ cname }}"
     state: absent
     force_kill: true
   diff: false
 
-- assert:
+- ansible.builtin.assert:
     that:
-    - published_ports_1 is changed
-    - published_ports_2 is not changed
-    - published_ports_3 is changed
+      - published_ports_1 is changed
+      - published_ports_2 is not changed
+      - published_ports_3 is changed
+      - published_ports_4 is not changed
 
 ####################################################################
 ## published_ports: one-element container port range ###############
 ####################################################################
 
 - name: published_ports -- one-element container port range
-  docker_container:
+  community.docker.docker_container:
     image: "{{ docker_test_image_alpine }}"
     command: '/bin/sh -c "sleep 10m"'
     name: "{{ item }}"
     state: started
     published_ports:
-    - "9010-9050:9010"
+      - "9010-9050:9010"
     force_kill: true
   loop:
     - '{{ cname }}'
@@ -138,13 +234,13 @@
   register: published_ports_1
 
 - name: published_ports -- one-element container port range (idempotency)
-  docker_container:
+  community.docker.docker_container:
     image: "{{ docker_test_image_alpine }}"
     command: '/bin/sh -c "sleep 10m"'
     name: "{{ item }}"
     state: started
     published_ports:
-    - "9010-9050:9010"
+      - "9010-9050:9010"
     force_kill: true
   loop:
     - '{{ cname }}'
@@ -152,13 +248,13 @@
   register: published_ports_2
 
 - name: published_ports -- one-element container port range (different range)
-  docker_container:
+  community.docker.docker_container:
     image: "{{ docker_test_image_alpine }}"
     command: '/bin/sh -c "sleep 10m"'
     name: "{{ item }}"
     state: started
     published_ports:
-    - "9010-9051:9010"
+      - "9010-9051:9010"
     force_kill: true
   loop:
     - '{{ cname }}'
@@ -166,7 +262,7 @@
   register: published_ports_3
 
 - name: cleanup
-  docker_container:
+  community.docker.docker_container:
     name: "{{ item }}"
     state: absent
     force_kill: true
@@ -175,11 +271,63 @@
     - '{{ cname2 }}'
   diff: false
 
-- assert:
+- ansible.builtin.assert:
     that:
-    - published_ports_1 is changed
-    - published_ports_2 is not changed
-    - published_ports_3 is changed
+      - published_ports_1 is changed
+      - published_ports_2 is not changed
+      - published_ports_3 is changed
+
+####################################################################
+## published_ports: duplicate ports ################################
+####################################################################
+
+- name: published_ports -- duplicate ports
+  community.docker.docker_container:
+    image: "{{ docker_test_image_alpine }}"
+    command: '/bin/sh -c "sleep 10m"'
+    name: "{{ cname }}"
+    state: started
+    published_ports:
+      - 8000:80
+      - 10000:80
+  register: published_ports_1
+
+- name: published_ports -- duplicate ports (idempotency)
+  community.docker.docker_container:
+    image: "{{ docker_test_image_alpine }}"
+    command: '/bin/sh -c "sleep 10m"'
+    name: "{{ cname }}"
+    state: started
+    published_ports:
+      - 8000:80
+      - 10000:80
+    force_kill: true
+  register: published_ports_2
+
+- name: published_ports -- duplicate ports (idempotency w/ protocol)
+  community.docker.docker_container:
+    image: "{{ docker_test_image_alpine }}"
+    command: '/bin/sh -c "sleep 10m"'
+    name: "{{ cname }}"
+    state: started
+    published_ports:
+      - 8000:80/tcp
+      - 10000:80/tcp
+    force_kill: true
+  register: published_ports_3
+
+- name: cleanup
+  community.docker.docker_container:
+    name: "{{ cname }}"
+    state: absent
+    force_kill: true
+  diff: false
+
+- ansible.builtin.assert:
+    that:
+      - published_ports_1 is changed
+      - published_ports_2 is not changed
+      - published_ports_3 is not changed
 
 ####################################################################
 ## published_ports: IPv6 addresses #################################
@@ -188,69 +336,69 @@
 - when: docker_host_info.host_info.ServerVersion is version('27.0.0', '<')
   block:
     - name: published_ports -- IPv6
-      docker_container:
+      community.docker.docker_container:
         image: "{{ docker_test_image_alpine }}"
         command: '/bin/sh -c "sleep 10m"'
         name: "{{ cname }}"
         state: started
         published_ports:
-        - "[::1]:9001:9001"
+          - "[::1]:9001:9001"
         force_kill: true
       register: published_ports_1
 
     - name: published_ports -- IPv6 (idempotency)
-      docker_container:
+      community.docker.docker_container:
         image: "{{ docker_test_image_alpine }}"
         command: '/bin/sh -c "sleep 10m"'
         name: "{{ cname }}"
         state: started
         published_ports:
-        - "[::1]:9001:9001"
+          - "[::1]:9001:9001"
         force_kill: true
       register: published_ports_2
 
     - name: published_ports -- IPv6 (different IP)
-      docker_container:
+      community.docker.docker_container:
         image: "{{ docker_test_image_alpine }}"
         command: '/bin/sh -c "sleep 10m"'
         name: "{{ cname }}"
         state: started
         published_ports:
-        - "127.0.0.1:9001:9001"
+          - "127.0.0.1:9001:9001"
         force_kill: true
       register: published_ports_3
 
     - name: published_ports -- IPv6 (hostname)
-      docker_container:
+      community.docker.docker_container:
         image: "{{ docker_test_image_alpine }}"
         command: '/bin/sh -c "sleep 10m"'
         name: "{{ cname }}"
         state: started
         published_ports:
-        - "localhost:9001:9001"
+          - "localhost:9001:9001"
         force_kill: true
       register: published_ports_4
       ignore_errors: true
 
     - name: cleanup
-      docker_container:
+      community.docker.docker_container:
         name: "{{ cname }}"
         state: absent
         force_kill: true
       diff: false
 
-    - assert:
+    - ansible.builtin.assert:
         that:
-        - published_ports_1 is changed
-        - published_ports_2 is not changed
-        - published_ports_3 is changed
-        - published_ports_4 is failed
+          - published_ports_1 is changed
+          - published_ports_2 is not changed
+          - published_ports_3 is changed
+          - published_ports_4 is failed
 
 ####################################################################
 ## publish_all_ports ###############################################
 ####################################################################
 
-- set_fact:
+- ansible.builtin.set_fact:
     publish_all_ports_test_cases:
       - test_name: no_options
         changed: true
@@ -306,7 +454,7 @@
         changed: false
 
 - name: publish_all_ports ({{ test_case.test_name }})
-  docker_container:
+  community.docker.docker_container:
     image: "{{ docker_test_image_alpine }}"
     command: '/bin/sh -c "sleep 10m"'
     name: "{{ cname }}"
@@ -319,7 +467,7 @@
     loop_var: test_case
   loop: "{{ publish_all_ports_test_cases }}"
 
-- assert:
+- ansible.builtin.assert:
     that:
       - publish_all_ports.results[index].changed == test_case.changed
   loop: "{{ publish_all_ports_test_cases }}"

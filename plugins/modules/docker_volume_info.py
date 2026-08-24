@@ -1,13 +1,10 @@
 #!/usr/bin/python
-# coding: utf-8
 #
 # Copyright 2017 Red Hat | Ansible, Alex Grönholm <alex.gronholm@nextday.fi>
 # GNU General Public License v3.0+ (see LICENSES/GPL-3.0-or-later.txt or https://www.gnu.org/licenses/gpl-3.0.txt)
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from __future__ import absolute_import, division, print_function
-__metaclass__ = type
-
+from __future__ import annotations
 
 DOCUMENTATION = r"""
 module: docker_volume_info
@@ -15,11 +12,11 @@ short_description: Retrieve facts about Docker volumes
 description:
   - Performs largely the same function as the C(docker volume inspect) CLI subcommand.
 extends_documentation_fragment:
-  - community.docker.docker.api_documentation
-  - community.docker.attributes
-  - community.docker.attributes.actiongroup_docker
-  - community.docker.attributes.info_module
-  - community.docker.attributes.idempotent_not_modify_state
+  - community.docker._docker.api_documentation
+  - community.docker._attributes
+  - community.docker._attributes.actiongroup_docker
+  - community.docker._attributes.info_module
+  - community.docker._attributes.idempotent_not_modify_state
 
 options:
   name:
@@ -38,6 +35,7 @@ requirements:
 """
 
 EXAMPLES = r"""
+---
 - name: Get infos on volume
   community.docker.docker_volume_info:
     name: mydata
@@ -71,29 +69,33 @@ volume:
 """
 
 import traceback
+import typing as t
 
-from ansible.module_utils.common.text.converters import to_native
-
-from ansible_collections.community.docker.plugins.module_utils.common_api import (
+from ansible_collections.community.docker.plugins.module_utils._api.errors import (
+    DockerException,
+    NotFound,
+)
+from ansible_collections.community.docker.plugins.module_utils._common_api import (
     AnsibleDockerClient,
     RequestException,
 )
-from ansible_collections.community.docker.plugins.module_utils._api.errors import DockerException, NotFound
 
 
-def get_existing_volume(client, volume_name):
+def get_existing_volume(
+    client: AnsibleDockerClient, volume_name: str
+) -> dict[str, t.Any] | None:
     try:
-        return client.get_json('/volumes/{0}', volume_name)
-    except NotFound as dummy:
+        return client.get_json("/volumes/{0}", volume_name)
+    except NotFound:
         return None
-    except Exception as exc:
-        client.fail("Error inspecting volume: %s" % to_native(exc))
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        client.fail(f"Error inspecting volume: {exc}")
 
 
-def main():
-    argument_spec = dict(
-        name=dict(type='str', required=True, aliases=['volume_name']),
-    )
+def main() -> None:
+    argument_spec = {
+        "name": {"type": "str", "required": True, "aliases": ["volume_name"]},
+    }
 
     client = AnsibleDockerClient(
         argument_spec=argument_spec,
@@ -101,20 +103,24 @@ def main():
     )
 
     try:
-        volume = get_existing_volume(client, client.module.params['name'])
+        volume = get_existing_volume(client, client.module.params["name"])
 
         client.module.exit_json(
             changed=False,
-            exists=(True if volume else False),
+            exists=bool(volume),
             volume=volume,
         )
     except DockerException as e:
-        client.fail('An unexpected Docker error occurred: {0}'.format(to_native(e)), exception=traceback.format_exc())
+        client.fail(
+            f"An unexpected Docker error occurred: {e}",
+            exception=traceback.format_exc(),
+        )
     except RequestException as e:
         client.fail(
-            'An unexpected requests error occurred when trying to talk to the Docker daemon: {0}'.format(to_native(e)),
-            exception=traceback.format_exc())
+            f"An unexpected requests error occurred when trying to talk to the Docker daemon: {e}",
+            exception=traceback.format_exc(),
+        )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

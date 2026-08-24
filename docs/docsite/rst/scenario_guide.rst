@@ -24,13 +24,13 @@ Note that plugins (inventory plugins and connection plugins) are always executed
 
 You can install the Docker SDK for Python for Python 3.6 or later as follows:
 
-.. code-block:: bash
+.. code-block:: console
 
     $ pip install docker
 
 For Python 2.7, you need to use a version between 2.0.0 and 4.4.4 since the Python package for Docker removed support for Python 2.7 on 5.0.0. You can install the specific version of the Docker SDK for Python as follows:
 
-.. code-block:: bash
+.. code-block:: console
 
     $ pip install 'docker==4.4.4'
 
@@ -95,7 +95,7 @@ The following example shows how the module default group can be used in a playbo
 .. code-block:: yaml+jinja
 
     ---
-    - name: Pull and image and start the container
+    - name: Pull image and start the container
       hosts: localhost
       gather_facts: false
       module_defaults:
@@ -258,27 +258,22 @@ Docker Compose
 Docker Compose v2
 .................
 
-There are two modules for working with Docker compose projects:
+There are several modules for working with Docker Compose projects:
 
     community.docker.docker_compose_v2
-        The :ansplugin:`community.docker.docker_compose_v2 module <community.docker.docker_compose_v2#module>` allows you to use your existing Docker compose files to orchestrate containers on a single Docker daemon or on Swarm.
+        The :ansplugin:`community.docker.docker_compose_v2 module <community.docker.docker_compose_v2#module>` allows you to use your existing Docker Compose files to orchestrate containers on a single Docker daemon or on Swarm.
+
+    community.docker.docker_compose_v2_exec
+        The :ansplugin:`community.docker.docker_compose_v2_exec module <community.docker.docker_compose_v2_exec#module>` allows you to run a command in a container of Docker Compose projects.
 
     community.docker.docker_compose_v2_pull
-        The :ansplugin:`community.docker.docker_compose_v2_pull module <community.docker.docker_compose_v2_pull#module>` allows you to pull Docker compose projects.
+        The :ansplugin:`community.docker.docker_compose_v2_pull module <community.docker.docker_compose_v2_pull#module>` allows you to pull Docker Compose projects.
+
+    community.docker.docker_compose_v2_run
+        The :ansplugin:`community.docker.docker_compose_v2_run module <community.docker.docker_compose_v2_run#module>` allows you to run a command in a new container of a Docker Compose project.
 
 These modules use the Docker CLI "compose" plugin (``docker compose``), and thus needs access to the Docker CLI tool.
 No further requirements next to to the CLI tool and its Docker Compose plugin are needed.
-
-Docker Compose v1
-.................
-
-The deprecated :ansplugin:`community.docker.docker_compose module <community.docker.docker_compose#module>`
-allows you to use your existing Docker compose files to orchestrate containers on a single Docker daemon or on Swarm.
-This module uses the out-dated and End of Life version 1.x of Docker Compose. It should mainly be used for legacy systems
-which still have to use that version of Docker Compose. **The module is deprecated and will be removed from community.docker 4.0.0.**
-Please use the Docker Compose v2 modules instead.
-
-You need to install the `old Python docker-compose <https://pypi.org/project/docker-compose/>`_ on the remote machines to use the Docker Compose v1 module.
 
 
 Docker Machine

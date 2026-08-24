@@ -4,9 +4,7 @@
 # GNU General Public License v3.0+ (see LICENSES/GPL-3.0-or-later.txt or https://www.gnu.org/licenses/gpl-3.0.txt)
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from __future__ import absolute_import, division, print_function
-__metaclass__ = type
-
+from __future__ import annotations
 
 DOCUMENTATION = r"""
 module: docker_network_info
@@ -18,11 +16,11 @@ description:
   - Essentially returns the output of C(docker network inspect <name>), similar to what M(community.docker.docker_network)
     returns for a non-absent network.
 extends_documentation_fragment:
-  - community.docker.docker.api_documentation
-  - community.docker.attributes
-  - community.docker.attributes.actiongroup_docker
-  - community.docker.attributes.info_module
-  - community.docker.attributes.idempotent_not_modify_state
+  - community.docker._docker.api_documentation
+  - community.docker._attributes
+  - community.docker._attributes.actiongroup_docker
+  - community.docker._attributes.info_module
+  - community.docker._attributes.idempotent_not_modify_state
 
 options:
   name:
@@ -40,6 +38,7 @@ requirements:
 """
 
 EXAMPLES = r"""
+---
 - name: Get infos on network
   community.docker.docker_network_info:
     name: mydata
@@ -68,27 +67,49 @@ network:
     - Will be V(none) if network does not exist.
   returned: always
   type: dict
-  sample: {"Attachable": false, "ConfigFrom": {"Network": ""}, "ConfigOnly": false, "Containers": {}, "Created": "2018-12-07T01:47:51.250835114-06:00",
-    "Driver": "bridge", "EnableIPv6": false, "IPAM": {"Config": [{"Gateway": "192.168.96.1", "Subnet": "192.168.96.0/20"}],
-      "Driver": "default", "Options": null}, "Id": "0856968545f22026c41c2c7c3d448319d3b4a6a03a40b148b3ac4031696d1c0a", "Ingress": false,
-    "Internal": false, "Labels": {}, "Name": "ansible-test-f2700bba", "Options": {}, "Scope": "local"}
+  sample: {
+    "Attachable": false,
+    "ConfigFrom": {"Network": ""},
+    "ConfigOnly": false,
+    "Containers": {},
+    "Created": "2018-12-07T01:47:51.250835114-06:00",
+    "Driver": "bridge",
+    "EnableIPv6": false,
+    "IPAM": {
+      "Config": [
+        {
+          "Gateway": "192.168.96.1",
+          "Subnet": "192.168.96.0/20",
+        },
+      ],
+      "Driver": "default",
+      "Options": null,
+    },
+    "Id": "0856968545f22026c41c2c7c3d448319d3b4a6a03a40b148b3ac4031696d1c0a",
+    "Ingress": false,
+    "Internal": false,
+    "Labels": {},
+    "Name": "ansible-test-f2700bba",
+    "Options": {},
+    "Scope": "local",
+  }
 """
 
 import traceback
 
-from ansible.module_utils.common.text.converters import to_native
-
-from ansible_collections.community.docker.plugins.module_utils.common_api import (
+from ansible_collections.community.docker.plugins.module_utils._api.errors import (
+    DockerException,
+)
+from ansible_collections.community.docker.plugins.module_utils._common_api import (
     AnsibleDockerClient,
     RequestException,
 )
-from ansible_collections.community.docker.plugins.module_utils._api.errors import DockerException
 
 
-def main():
-    argument_spec = dict(
-        name=dict(type='str', required=True),
-    )
+def main() -> None:
+    argument_spec = {
+        "name": {"type": "str", "required": True},
+    }
 
     client = AnsibleDockerClient(
         argument_spec=argument_spec,
@@ -96,20 +117,24 @@ def main():
     )
 
     try:
-        network = client.get_network(client.module.params['name'])
+        network = client.get_network(client.module.params["name"])
 
         client.module.exit_json(
             changed=False,
-            exists=(True if network else False),
+            exists=bool(network),
             network=network,
         )
     except DockerException as e:
-        client.fail('An unexpected Docker error occurred: {0}'.format(to_native(e)), exception=traceback.format_exc())
+        client.fail(
+            f"An unexpected Docker error occurred: {e}",
+            exception=traceback.format_exc(),
+        )
     except RequestException as e:
         client.fail(
-            'An unexpected requests error occurred when trying to talk to the Docker daemon: {0}'.format(to_native(e)),
-            exception=traceback.format_exc())
+            f"An unexpected requests error occurred when trying to talk to the Docker daemon: {e}",
+            exception=traceback.format_exc(),
+        )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
